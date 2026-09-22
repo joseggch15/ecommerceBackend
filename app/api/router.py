@@ -9,6 +9,7 @@ from app.modules.currency import api as currency_api
 from app.modules.identity import api as identity_api
 from app.modules.inventory import api as inventory_api
 from app.modules.orders import api as orders_api
+from app.modules.payments import api as payments_api
 from app.modules.search import api as search_api
 from app.modules.sellers import api as sellers_api
 
@@ -22,3 +23,4 @@ api_router.include_router(search_api.router)
 api_router.include_router(currency_api.router)
 api_router.include_router(cart_api.router)
 api_router.include_router(orders_api.router)
+api_router.include_router(payments_api.router)

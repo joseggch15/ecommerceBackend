@@ -66,6 +66,11 @@ class Settings(BaseSettings):
     EXCHANGE_RATE_API_KEY: str = ""
     EXCHANGE_RATE_CACHE_TTL_SECONDS: int = 3600
 
+    # Pagos (proveedor en sandbox + webhooks firmados con HMAC-SHA256)
+    PAYMENT_PROVIDER: str = "sandbox"
+    PAYMENT_WEBHOOK_SECRET: str = "dev-webhook-secret"
+    PAYMENT_CHECKOUT_BASE_URL: str = "https://sandbox.marketplace.local/checkout"
+
 
 @lru_cache
 def get_settings() -> Settings:

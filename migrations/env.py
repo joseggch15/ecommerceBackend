@@ -14,6 +14,7 @@ import app.modules.catalog.models
 import app.modules.identity.models
 import app.modules.inventory.models
 import app.modules.orders.models
+import app.modules.payments.models
 import app.modules.sellers.models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base

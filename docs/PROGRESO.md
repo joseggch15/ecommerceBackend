@@ -114,9 +114,21 @@
 
 > El pago se asocia a la **orden completa** (Fase 7); los envíos, a cada sub-orden (Fase 8).
 
+## Fase 7: Pagos en sandbox y webhooks — COMPLETADA
+
+- [x] `payments` (intento de pago de una orden) + `payment_events` (webhooks en crudo, `UNIQUE(provider, provider_event_id)`).
+- [x] **Proveedor detrás de una interfaz** (`PaymentProvider`) con implementación `sandbox`; cambiar de pasarela es registrar otra.
+- [x] **Webhooks firmados** con HMAC-SHA256 (`X-Signature`), verificación en tiempo constante e **idempotencia** por evento.
+- [x] **Simulador sandbox** (`POST /payments/{id}/simulate`) que recorre el mismo camino que un webhook real.
+- [x] Estados: `pending → processing → succeeded / failed / cancelled / refunded`, reflejados en `orders.payment_status` y `orders.status`.
+- [x] Reintentos: un pago fallido deja la orden pendiente y permite crear otro intento.
+- [x] Endpoints: `POST /orders/{id}/payments`, `GET /orders/{id}/payments`, `GET /payments/{id}`, `POST /payments/{id}/simulate`, `POST /webhooks/payments/{provider}`.
+- [x] Migración `b5bdd281b2fc` aplicada (los índices de búsqueda se preservaron).
+- [x] 67 pruebas en verde (8 nuevas de pagos).
+
 ## Próximos pasos
 
-- [ ] Fase 7: Pagos en sandbox y webhooks.
+- [ ] Fase 8: Envíos.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.
