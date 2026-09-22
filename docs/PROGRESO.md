@@ -177,9 +177,21 @@
 
 > Compromiso conocido: la cola se escribe en Redis **dentro** de la transacción (no hay outbox transaccional). Si la transacción falla tras encolar, el trabajo queda huérfano y el worker lo marca `failed`; para producción conviene un **outbox** en BD.
 
+## Fase 12: Administración y moderación — COMPLETADA
+
+- [x] `admin_actions`: **libro de auditoría** de cada acción (quién, qué, sobre qué, por qué y datos extra).
+- [x] **Moderación de productos**: `POST /admin/products/{id}/suspend` (→ `paused`, sale de la venta) y `/restore` (→ `active`).
+- [x] **Moderación de tiendas**: `POST /admin/stores/{id}/suspend` (→ `suspended`) y `/restore` (→ `approved`).
+- [x] **Moderación de reseñas**: `POST /admin/reviews/{id}/hide` y `/publish` usando el `is_published` de la Fase 9, **recalculando la reputación** del producto y de la tienda.
+- [x] **Tablero** `GET /admin/metrics`: usuarios, tiendas, productos activos, órdenes por estado, **GMV**, **comisión acumulada** y **top 5 vendedores**.
+- [x] `GET /admin/actions`: auditoría paginada. Todo el prefijo `/admin` exige rol **admin** (401 sin token, 403 con rol customer).
+- [x] Migración `6ea2b3f185b6` aplicada (32 tablas, índices GIN intactos).
+- [x] 85 pruebas en verde (3 nuevas de administración).
+
+> Los cambios de estado respetan las máquinas de estados ya existentes (catálogo y tiendas) y quedan auditados; el `reason` es opcional pero recomendado desde el panel.
+
 ## Próximos pasos
 
-- [ ] Fase 12: Administración y moderación.
 - [ ] Fase 13: Endurecimiento (caché, rendimiento, pruebas de carga, seguridad, despliegue).
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.

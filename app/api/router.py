@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import health
+from app.modules.admin import api as admin_api
 from app.modules.cart import api as cart_api
 from app.modules.catalog import api as catalog_api
 from app.modules.currency import api as currency_api
@@ -26,6 +27,7 @@ api_router.include_router(inventory_api.router)
 api_router.include_router(notifications_api.router)
 api_router.include_router(search_api.router)
 api_router.include_router(currency_api.router)
+api_router.include_router(admin_api.router)
 api_router.include_router(cart_api.router)
 api_router.include_router(orders_api.router)
 api_router.include_router(payments_api.router)

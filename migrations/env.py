@@ -8,6 +8,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import app.modules.admin.models
 import app.modules.cart.models
 import app.modules.catalog.models
 import app.modules.identity.models
@@ -27,6 +28,7 @@ from app.core.database import Base
 # migración que DROPEA todas las tablas. Esta lista los mantiene "usados" y, de
 # paso, comprobamos que el metadata quedó completo antes de migrar nada.
 _MODEL_MODULES = (
+    app.modules.admin.models,
     app.modules.cart.models,
     app.modules.catalog.models,
     app.modules.identity.models,
