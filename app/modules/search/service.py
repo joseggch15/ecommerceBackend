@@ -16,6 +16,7 @@ from app.modules.catalog.models import (
     ProductStatus,
     ProductVariant,
 )
+from app.modules.orders.repository import paid_units_subquery
 from app.modules.search.schemas import (
     BrandFacetOut,
     CategoryFacetOut,
@@ -142,6 +143,7 @@ class SearchService:
         min_price_sq = _min_price_subquery()
         thumbnail_sq = _thumbnail_subquery()
         store_name_sq = _store_name_subquery()
+        sold_count_sq = paid_units_subquery(Product.id)
         vector = _search_vector()
         rank = func.ts_rank(vector, func.plainto_tsquery("simple", q)) if q else None
 
@@ -170,6 +172,7 @@ class SearchService:
             min_price_sq.label("min_price"),
             thumbnail_sq.label("thumbnail"),
             store_name_sq.label("store_name"),
+            sold_count_sq.label("sold_count"),
         ]
         if rank is not None:
             columns.append(rank.label("rank"))
@@ -236,6 +239,7 @@ class SearchService:
                 rating_average=row["rating_average"],
                 review_count=int(row["review_count"] or 0),
                 store_name=row["store_name"],
+                sold_count=int(row["sold_count"] or 0),
             )
             for row in rows
         ]

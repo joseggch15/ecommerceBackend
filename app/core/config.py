@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     NOTIFICATION_WORKER_ENABLED: bool = False
     NOTIFICATION_WORKER_INTERVAL_SECONDS: float = 5.0
 
+    # Correo verificado: **apagado por defecto** en el prototipo (decisión 0023). Con `true`, vender
+    # (crear la tienda y gestionar productos) y publicar preguntas y reseñas exige haber verificado
+    # el correo. Con `false` el correo de verificación se sigue enviando y se puede canjear, pero
+    # nada queda bloqueado: es lo que hace cómodo probar la tienda sin abrir Mailpit.
+    REQUIRE_VERIFIED_EMAIL: bool = False
+
     # Endurecimiento (Fase 13)
     ALLOWED_HOSTS: list[str] = ["*"]
     HSTS_MAX_AGE_SECONDS: int = 31536000

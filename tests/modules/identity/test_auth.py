@@ -30,15 +30,36 @@ async def _login(
     return await client.post("/api/v1/auth/login", json={"email": email, "password": password})
 
 
-async def test_register_returns_created_user(integration_client: AsyncClient) -> None:
+async def test_register_returns_user_and_tokens(integration_client: AsyncClient) -> None:
+    """El registro crea la cuenta **y deja la sesión iniciada** (apartado 15, decisión 0023)."""
     resp = await _register(integration_client)
     assert resp.status_code == 201
     body = resp.json()
-    assert body["email"] == "buyer@example.com"
-    assert body["role"] == "customer"
-    assert body["email_verified"] is False
-    assert body["profile"]["full_name"] == "Comprador"
-    assert body["profile"]["preferred_currency"] == "COP"
+
+    user = body["user"]
+    assert user["email"] == "buyer@example.com"
+    assert user["role"] == "customer"
+    assert user["email_verified"] is False
+    assert user["profile"]["full_name"] == "Comprador"
+    assert user["profile"]["preferred_currency"] == "COP"
+
+    # Los tokens del registro valen tal cual: no hace falta volver a iniciar sesión.
+    assert body["token_type"] == "bearer"
+    assert body["access_token"]
+    assert body["refresh_token"]
+
+    me = await integration_client.get(
+        "/api/v1/users/me", headers={"Authorization": f"Bearer {body['access_token']}"}
+    )
+    assert me.status_code == 200
+    assert me.json()["id"] == user["id"]
+
+    # Y el refresh token también es real (rota el par).
+    refreshed = await integration_client.post(
+        "/api/v1/auth/refresh", json={"refresh_token": body["refresh_token"]}
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json()["access_token"]
 
 
 async def test_register_duplicate_email_conflict(integration_client: AsyncClient) -> None:
@@ -90,7 +111,7 @@ async def test_logout_revokes_refresh_token(integration_client: AsyncClient) -> 
 
 async def test_verify_email(integration_client: AsyncClient, db_session: AsyncSession) -> None:
     register_resp = await _register(integration_client)
-    user_id = uuid.UUID(register_resp.json()["id"])
+    user_id = uuid.UUID(register_resp.json()["user"]["id"])
 
     raw = generate_opaque_token()
     db_session.add(
@@ -117,7 +138,7 @@ async def test_reset_password_flow(
     integration_client: AsyncClient, db_session: AsyncSession
 ) -> None:
     register_resp = await _register(integration_client)
-    user_id = uuid.UUID(register_resp.json()["id"])
+    user_id = uuid.UUID(register_resp.json()["user"]["id"])
 
     raw = generate_opaque_token()
     db_session.add(

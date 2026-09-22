@@ -21,6 +21,8 @@ class ProductSearchItem(BaseModel):
     review_count: int
     # Tienda que lo vende (para «vendido por»).
     store_name: str
+    # Unidades vendidas en órdenes pagadas (insignia «más vendido»).
+    sold_count: int
 
 
 class CategoryFacetOut(BaseModel):

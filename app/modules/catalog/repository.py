@@ -2,8 +2,9 @@
 
 import uuid
 from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.catalog.models import (
@@ -12,6 +13,7 @@ from app.modules.catalog.models import (
     CategoryAttribute,
     Product,
     ProductImage,
+    ProductStatus,
     ProductVariant,
     VariantValue,
 )
@@ -145,6 +147,38 @@ class ProductRepository:
             .where(Product.store_id == store_id, Product.deleted_at.is_(None))
             .order_by(Product.created_at)
         )
+        return list(result.scalars().all())
+
+    async def list_public(
+        self,
+        *,
+        q: str | None,
+        limit: int,
+        cursor: tuple[datetime, uuid.UUID] | None = None,
+    ) -> list[Product]:
+        """Productos **activos** del más reciente al más antiguo (listado público del sitemap).
+
+        Ordena por `updated_at` (que es el `lastmod` que publica el sitemap) y desempata por `id`
+        para que el cursor no se salte ni repita filas entre páginas.
+        """
+        stmt = (
+            select(Product)
+            .where(Product.status == ProductStatus.ACTIVE, Product.deleted_at.is_(None))
+            .order_by(Product.updated_at.desc(), Product.id.desc())
+            .limit(limit)
+        )
+        if q:
+            pattern = f"%{q}%"
+            stmt = stmt.where(or_(Product.title.ilike(pattern), Product.slug.ilike(pattern)))
+        if cursor is not None:
+            updated_at, product_id = cursor
+            stmt = stmt.where(
+                or_(
+                    Product.updated_at < updated_at,
+                    (Product.updated_at == updated_at) & (Product.id < product_id),
+                )
+            )
+        result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
 

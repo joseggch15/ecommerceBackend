@@ -43,8 +43,10 @@ from app.modules.identity.repository import (
 from app.modules.identity.schemas import (
     AddressCreate,
     AddressUpdate,
+    RegisterOut,
     RegisterRequest,
     TokenPair,
+    UserOut,
     UserUpdate,
 )
 from app.modules.notifications.models import NotificationType
@@ -75,7 +77,13 @@ class AuthService:
         self._refresh_tokens = RefreshTokenRepository(session)
         self._user_tokens = UserTokenRepository(session)
 
-    async def register(self, data: RegisterRequest) -> User:
+    async def register(self, data: RegisterRequest) -> RegisterOut:
+        """Crea la cuenta **y deja la sesión iniciada** (devuelve el usuario y sus tokens).
+
+        Enviar el correo de verificación no cambia: se encola igual y el usuario puede canjearlo
+        cuando quiera. Que la verificación sea o no obligatoria lo decide `REQUIRE_VERIFIED_EMAIL`
+        en los endpoints que publican o venden (decisión 0023), no el registro.
+        """
         existing = await self._users.get_by_email(data.email)
         if existing is not None:
             raise AppError(409, "email_already_registered", "This email is already registered.")
@@ -109,8 +117,10 @@ class AuthService:
             expires_minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES,
         )
 
+        # La sesión queda iniciada: mismos tokens que el login, en la misma transacción.
+        pair, _ = await self._issue_token_pair(user)
         await self._session.commit()
-        return user
+        return RegisterOut(user=UserOut.model_validate(user), **pair.model_dump())
 
     async def login(self, email: str, password: str) -> TokenPair:
         user = await self._users.get_by_email(email)

@@ -22,6 +22,7 @@ from app.modules.catalog.schemas import (
     ProductImageOut,
     ProductOut,
     ProductUpdate,
+    PublicProductListOut,
     UploadUrlOut,
 )
 from app.modules.catalog.service import CatalogService, ProductService
@@ -172,6 +173,32 @@ async def create_product(
     service: ProductService = Depends(get_product_service),
 ) -> ProductOut:
     return await service.create_product(store.id, data)
+
+
+@router.get("/catalog/products/public", response_model=PublicProductListOut)
+async def list_public_products(
+    q: str | None = Query(
+        default=None,
+        max_length=100,
+        description="Filtra por título o slug (contiene). Sin valor, recorre todo el catálogo.",
+    ),
+    cursor: str | None = Query(
+        default=None, description="Cursor de la página anterior (`next_cursor`)."
+    ),
+    limit: int = Query(default=100, ge=1, le=500),
+    service: ProductService = Depends(get_product_service),
+) -> PublicProductListOut:
+    """Catálogo **publicado** completo, paginado por cursor (público, sin sesión).
+
+    Es el listado que necesita el `sitemap.xml` del frontend: recorre todos los productos activos
+    (los que se pueden visitar) del más reciente al más antiguo y devuelve, por cada uno, el `slug`
+    (la URL bonita) y `updated_at` (el `lastmod`). `GET /catalog/products` no sirve para esto porque
+    devuelve el catálogo **del vendedor** que hace la petición.
+
+    Va declarado **antes** de `/catalog/products/{product_id}` para que la ruta no se confunda con
+    un identificador, igual que `by-slug`.
+    """
+    return await service.list_public_products(q=q, cursor=cursor, limit=limit)
 
 
 @router.get("/catalog/products/by-slug/{slug}", response_model=ProductOut)

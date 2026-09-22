@@ -140,8 +140,34 @@ class ProductOut(BaseModel):
     created_at: datetime
     # Suma del stock disponible de todas las variantes (para la ficha y los listados).
     total_available: int = 0
+    # Unidades vendidas en órdenes pagadas (insignia «más vendido»). Se cuenta siempre, no se
+    # guarda en una columna: un contador denormalizado se desincroniza.
+    sold_count: int = 0
     variants: list[VariantOut] = Field(default_factory=list)
     images: list[ProductImageOut] = Field(default_factory=list)
+
+
+# ---------- Listado público (sitemap) ----------
+
+
+class PublicProductSummaryOut(BaseModel):
+    """Producto publicado con lo mínimo para construir el sitemap.
+
+    `slug` es la URL bonita y `updated_at` el `lastmod`: son los dos datos que pide un sitemap para
+    recorrer el catálogo entero sin descargar cada ficha.
+    """
+
+    id: uuid.UUID
+    slug: str
+    title: str
+    updated_at: datetime
+
+
+class PublicProductListOut(BaseModel):
+    """Página del catálogo publicado (paginación por cursor)."""
+
+    items: list[PublicProductSummaryOut]
+    next_cursor: str | None
 
 
 class ImageUploadRequest(BaseModel):

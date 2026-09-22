@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from httpx import AsyncClient
+from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,6 +75,42 @@ async def _create_and_publish(
     ).json()
     await client.post(f"/api/v1/catalog/products/{product['id']}/publish", headers=_auth(token))
     return dict(product)
+
+
+ADDRESS: dict[str, str] = {
+    "recipient": "Juan Perez",
+    "line1": "Calle 123 #45-67",
+    "city": "Bogota",
+    "country": "CO",
+}
+
+
+async def _reset_register_rate_limit() -> None:
+    """El registro está limitado a 3/min por IP y aquí se crean varios usuarios."""
+    redis: Redis = Redis.from_url("redis://localhost:6379/1", decode_responses=True)
+    try:
+        keys = await redis.keys("rate_limit:register:*")
+        if keys:
+            await redis.delete(*keys)
+    finally:
+        await redis.aclose()
+
+
+async def _register_buyer(client: AsyncClient, email: str) -> str:
+    """Crea un comprador y devuelve su access token."""
+    await _reset_register_rate_limit()
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": "secret123", "full_name": "Comprador"},
+    )
+    assert response.status_code == 201, response.text
+    return await _login(client, email)
+
+
+async def _search_titles(client: AsyncClient) -> dict[str, Any]:
+    """Resultados de búsqueda indexados por título (para leer un item concreto)."""
+    body = (await client.get("/api/v1/catalog/search")).json()
+    return {item["title"]: item for item in body["items"]}
 
 
 async def test_search_finds_published_product(
@@ -201,3 +238,69 @@ async def test_search_facets_count_categories_brands_and_price(
     }
     assert {row["name"]: row["count"] for row in by_brand["facets"]["categories"]} == {"Ropa": 2}
     assert len(by_brand["items"]) == 2
+
+
+async def test_sold_count_counts_only_paid_orders(
+    integration_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`sold_count` suma unidades de órdenes **pagadas** y deja de contar al reembolsar.
+
+    Es la insignia «más vendido»: sale de agregar las líneas de orden pagadas, no de un contador
+    denormalizado que se pueda desincronizar (apartado «datos que faltan para la interfaz»).
+    """
+    seller_token, _, category_id = await _setup(integration_client, db_session)
+    product = await _create_and_publish(
+        integration_client, seller_token, category_id, "Camiseta Azul", "25000"
+    )
+
+    # Sin ventas: cero (no se inventa ninguna cifra).
+    assert (await _search_titles(integration_client))["Camiseta Azul"]["sold_count"] == 0
+
+    buyer_token = await _register_buyer(integration_client, "buyer@example.com")
+    await integration_client.post(
+        "/api/v1/cart/items",
+        json={"variant_id": product["variants"][0]["id"], "quantity": 2},
+        headers=_auth(buyer_token),
+    )
+    order = (
+        await integration_client.post(
+            "/api/v1/orders",
+            json={"shipping_address": ADDRESS},
+            headers=_auth(buyer_token),
+        )
+    ).json()
+
+    # La orden existe pero todavía no está pagada: no cuenta como vendido.
+    assert (await _search_titles(integration_client))["Camiseta Azul"]["sold_count"] == 0
+
+    payment = (
+        await integration_client.post(
+            f"/api/v1/orders/{order['id']}/payments", headers=_auth(buyer_token)
+        )
+    ).json()
+    paid = await integration_client.post(
+        f"/api/v1/payments/{payment['id']}/simulate",
+        params={"outcome": "succeeded"},
+        headers=_auth(buyer_token),
+    )
+    assert paid.status_code == 200, paid.text
+
+    assert (await _search_titles(integration_client))["Camiseta Azul"]["sold_count"] == 2
+    detail = (
+        await integration_client.get(f"/api/v1/catalog/products/{product['id']}")
+    ).json()
+    assert detail["sold_count"] == 2
+
+    # Reembolso: el dinero volvió al comprador, así que esas unidades dejan de contar.
+    refunded = await integration_client.post(
+        f"/api/v1/payments/{payment['id']}/simulate",
+        params={"outcome": "refunded"},
+        headers=_auth(buyer_token),
+    )
+    assert refunded.status_code == 200, refunded.text
+
+    assert (await _search_titles(integration_client))["Camiseta Azul"]["sold_count"] == 0
+    detail = (
+        await integration_client.get(f"/api/v1/catalog/products/{product['id']}")
+    ).json()
+    assert detail["sold_count"] == 0

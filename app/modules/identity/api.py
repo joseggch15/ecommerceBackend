@@ -16,6 +16,7 @@ from app.modules.identity.schemas import (
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
+    RegisterOut,
     RegisterRequest,
     ResetPasswordRequest,
     TokenPair,
@@ -46,14 +47,20 @@ password_reset_rate_limit = Depends(
 
 @router.post(
     "/auth/register",
-    response_model=UserOut,
+    response_model=RegisterOut,
     status_code=status.HTTP_201_CREATED,
     dependencies=[register_rate_limit],
 )
 async def register(
     data: RegisterRequest,
     service: AuthService = Depends(get_auth_service),
-) -> User:
+) -> RegisterOut:
+    """Crea la cuenta y **deja la sesión iniciada**.
+
+    Devuelve el usuario creado y el mismo par de tokens que `POST /auth/login` (decisión 0023): el
+    registro ya no obliga a iniciar sesión después. El correo de verificación se envía igual; que
+    sea obligatorio para vender o publicar lo decide `REQUIRE_VERIFIED_EMAIL`.
+    """
     return await service.register(data)
 
 

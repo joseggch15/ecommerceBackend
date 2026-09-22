@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.modules.identity.deps import get_current_user, require_roles
+from app.modules.identity.deps import get_current_user, require_roles, require_verified_email
 from app.modules.identity.models import User, UserRole
 from app.modules.sellers.models import Store, StoreStatus
 from app.modules.sellers.schemas import PublicStoreOut, StoreCreate, StoreOut, StoreUpdate
@@ -22,10 +22,15 @@ def get_seller_service(session: AsyncSession = Depends(get_session)) -> SellerSe
 @router.post("/sellers/me", response_model=StoreOut, status_code=status.HTTP_201_CREATED)
 async def create_store(
     data: StoreCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_verified_email),
     service: SellerService = Depends(get_seller_service),
 ) -> Store:
-    """Solicita la creación de la tienda (queda pendiente de aprobación del admin)."""
+    """Solicita la creación de la tienda (queda pendiente de aprobación del admin).
+
+    Es el primer paso para vender, así que pasa por `require_verified_email`: si el interruptor
+    `REQUIRE_VERIFIED_EMAIL` está encendido, hay que tener el correo verificado para solicitarla
+    (decisión 0023).
+    """
     return await service.apply(user.id, data)
 
 

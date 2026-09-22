@@ -1,5 +1,6 @@
 """Lógica de negocio del módulo de catálogo (categorías y atributos)."""
 
+import base64
 import uuid
 from datetime import UTC, datetime
 
@@ -38,14 +39,32 @@ from app.modules.catalog.schemas import (
     ProductImageOut,
     ProductOut,
     ProductUpdate,
+    PublicProductListOut,
+    PublicProductSummaryOut,
     UploadUrlOut,
     VariantIn,
     VariantOut,
     VariantValueOut,
 )
 from app.modules.inventory.service import InventoryService
+from app.modules.orders.repository import OrderRepository
 from app.modules.shipping.estimates import ShippingEstimateOut, estimate_shipping
 from app.shared.text import slugify
+
+
+def _encode_cursor(updated_at: datetime, product_id: uuid.UUID) -> str:
+    """Cursor opaco del listado público (`updated_at` + `id`, en base64)."""
+    return base64.urlsafe_b64encode(f"{updated_at.isoformat()}|{product_id}".encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    """Devuelve `(updated_at, id)` del cursor o lanza 400 si viene corrupto."""
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        value, item_id = raw.rsplit("|", 1)
+        return datetime.fromisoformat(value), uuid.UUID(item_id)
+    except (ValueError, UnicodeDecodeError):
+        raise AppError(400, "invalid_cursor", "Invalid cursor.") from None
 
 
 class CatalogService:
@@ -229,6 +248,43 @@ class ProductService:
         products = await self._products.list_by_store(store_id)
         return [await self._to_out(p) for p in products]
 
+    async def list_public_products(
+        self, *, q: str | None, cursor: str | None, limit: int
+    ) -> PublicProductListOut:
+        """Catálogo **publicado** completo, paginado por cursor (lo usa el sitemap del frontend).
+
+        `GET /catalog/products` es del vendedor y `/catalog/search` filtra y ordena para el
+        comprador; este listado no filtra por relevancia ni por precio: recorre el catálogo entero
+        (solo productos activos) del más reciente al más antiguo, que es justo lo que necesita un
+        sitemap para construir sus URLs con `slug` y `lastmod` (`updated_at`).
+        """
+        decoded = _decode_cursor(cursor) if cursor else None
+        products = await self._products.list_public(
+            q=q.strip() if q and q.strip() else None,
+            limit=limit + 1,
+            cursor=decoded,
+        )
+
+        has_more = len(products) > limit
+        page = products[:limit]
+        next_cursor = None
+        if has_more and page:
+            last = page[-1]
+            next_cursor = _encode_cursor(last.updated_at, last.id)
+
+        return PublicProductListOut(
+            items=[
+                PublicProductSummaryOut(
+                    id=product.id,
+                    slug=product.slug,
+                    title=product.title,
+                    updated_at=product.updated_at,
+                )
+                for product in page
+            ],
+            next_cursor=next_cursor,
+        )
+
     async def update_product(
         self, product_id: uuid.UUID, store_id: uuid.UUID, data: ProductUpdate
     ) -> ProductOut:
@@ -389,6 +445,7 @@ class ProductService:
             status=product.status,
             created_at=product.created_at,
             total_available=sum(item.available for item in variant_out),
+            sold_count=await OrderRepository(self._session).sold_count_for_product(product.id),
             variants=variant_out,
             images=[ProductImageOut.model_validate(img) for img in images],
         )

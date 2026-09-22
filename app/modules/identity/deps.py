@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_session
 from app.core.errors import AppError
 from app.core.redis import get_redis
@@ -61,6 +62,20 @@ async def get_current_user(
     user = await UserRepository(session).get_by_id(user_id)
     if user is None:
         raise AppError(401, "unauthorized", "Invalid or expired token.")
+    return user
+
+
+async def require_verified_email(user: User = Depends(get_current_user)) -> User:
+    """Exige el correo verificado **solo** si `REQUIRE_VERIFIED_EMAIL` está encendido.
+
+    El prototipo lo deja apagado (decisión 0023): el correo de verificación se envía y se puede
+    canjear, pero nada queda bloqueado, para poder probar la tienda sin abrir Mailpit. Al encenderlo
+    (una línea del `.env`), vender y publicar exigen haber verificado el correo, con el código
+    estable `email_not_verified` (403) para que la interfaz sepa que debe ofrecer el reenvío.
+    """
+
+    if settings.REQUIRE_VERIFIED_EMAIL and not user.email_verified:
+        raise AppError(403, "email_not_verified", "You must verify your email address first.")
     return user
 
 

@@ -2,11 +2,40 @@
 
 import uuid
 from datetime import datetime
+from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.orders.models import Order, OrderItem, SellerOrder
+from app.modules.orders.models import Order, OrderItem, OrderStatus, SellerOrder
+
+# Estados de la orden en los que la venta **cuenta**: pagada y completada. Un reembolso deja la
+# orden en `refunded` y sus unidades dejan de contar (el dinero volvió al comprador).
+SOLD_ORDER_STATUSES: tuple[OrderStatus, ...] = (OrderStatus.PAID, OrderStatus.COMPLETED)
+
+
+def paid_units_subquery(product_id_column: Any) -> Any:
+    """Subconsulta escalar con las unidades vendidas de un producto.
+
+    Suma `order_items.quantity` de las órdenes pagadas (o completadas). Se resuelve con una
+    subconsulta correlacionada —igual que el precio mínimo o la miniatura de la búsqueda— en vez de
+    con un `JOIN` + `GROUP BY`, para que el listado no cambie de forma ni de orden.
+
+    `product_id_column` es la columna con la que se correlaciona: `Product.id` en la búsqueda, o un
+    identificador concreto cuando se pregunta por un solo producto.
+    """
+
+    return (
+        select(func.coalesce(func.sum(OrderItem.quantity), 0))
+        .select_from(OrderItem)
+        .join(SellerOrder, OrderItem.seller_order_id == SellerOrder.id)
+        .join(Order, SellerOrder.order_id == Order.id)
+        .where(
+            OrderItem.product_id == product_id_column,
+            Order.status.in_(SOLD_ORDER_STATUSES),
+        )
+        .scalar_subquery()
+    )
 
 
 class OrderRepository:
@@ -39,6 +68,11 @@ class OrderRepository:
             select(Order).where(Order.user_id == user_id, Order.idempotency_key == key)
         )
         return result.scalar_one_or_none()
+
+    async def sold_count_for_product(self, product_id: uuid.UUID) -> int:
+        """Unidades vendidas de un producto (solo órdenes pagadas o completadas)."""
+        result = await self._session.execute(select(paid_units_subquery(product_id)))
+        return int(result.scalar_one() or 0)
 
     async def list_by_user(
         self, user_id: uuid.UUID, *, limit: int, cursor: tuple[datetime, uuid.UUID] | None

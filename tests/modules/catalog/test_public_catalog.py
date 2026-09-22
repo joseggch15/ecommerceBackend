@@ -178,3 +178,83 @@ async def test_public_product_by_slug(
     assert missing.status_code == 404
     assert missing.json()["code"] == "product_not_found"
 
+
+async def test_public_product_listing_walks_the_catalog_for_the_sitemap(
+    integration_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`GET /catalog/products/public` recorre el catálogo publicado por cursor (apartado 13).
+
+    Trae `slug` y `updated_at` (el `lastmod` del sitemap), solo productos activos y sin repetir ni
+    perder filas entre páginas.
+    """
+    token = await _setup_seller(integration_client, db_session)
+    category = await _create_category(integration_client, db_session)
+
+    published: list[str] = []
+    for index, title in enumerate(["Camiseta", "Pantalon", "Zapatos"]):
+        product = (
+            await integration_client.post(
+                "/api/v1/catalog/products",
+                json={
+                    "title": title,
+                    "category_id": category["id"],
+                    "variants": [{"sku": f"SKU-{index}", "price": "25000", "stock": 3}],
+                },
+                headers=_auth(token),
+            )
+        ).json()
+        await integration_client.post(
+            f"/api/v1/catalog/products/{product['id']}/publish", headers=_auth(token)
+        )
+        published.append(product["slug"])
+
+    # Un borrador no es una URL pública, así que no sale en el listado.
+    draft = (
+        await integration_client.post(
+            "/api/v1/catalog/products",
+            json={
+                "title": "Sin publicar",
+                "category_id": category["id"],
+                "variants": [{"sku": "SKU-DRAFT", "price": "1000", "stock": 1}],
+            },
+            headers=_auth(token),
+        )
+    ).json()
+
+    # Página 1: máximo 2 y con cursor, porque quedan más.
+    first = await integration_client.get(
+        "/api/v1/catalog/products/public", params={"limit": 2}
+    )
+    assert first.status_code == 200, first.text
+    page_one = first.json()
+    assert len(page_one["items"]) == 2
+    assert page_one["next_cursor"]
+    assert set(page_one["items"][0]) == {"id", "slug", "title", "updated_at"}
+
+    # Página 2: el resto, sin repetir nada.
+    second = await integration_client.get(
+        "/api/v1/catalog/products/public",
+        params={"limit": 2, "cursor": page_one["next_cursor"]},
+    )
+    page_two = second.json()
+    assert len(page_two["items"]) == 1
+    assert page_two["next_cursor"] is None
+
+    slugs = [item["slug"] for item in page_one["items"] + page_two["items"]]
+    assert sorted(slugs) == sorted(published)
+    assert draft["slug"] not in slugs
+    assert all(item["updated_at"] for item in page_one["items"] + page_two["items"])
+
+    # El filtro `q` sirve para trocear el sitemap por partes.
+    filtered = await integration_client.get(
+        "/api/v1/catalog/products/public", params={"q": "pantalon"}
+    )
+    assert [item["slug"] for item in filtered.json()["items"]] == ["pantalon"]
+
+    # Un cursor corrupto se rechaza con el código estable de siempre.
+    broken = await integration_client.get(
+        "/api/v1/catalog/products/public", params={"cursor": "no-es-un-cursor"}
+    )
+    assert broken.status_code == 400
+    assert broken.json()["code"] == "invalid_cursor"
+

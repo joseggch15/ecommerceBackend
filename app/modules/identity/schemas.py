@@ -89,7 +89,22 @@ class UserOut(BaseModel):
     profile: UserProfileOut | None = None
 
 
+class RegisterOut(BaseModel):
+    """Respuesta del registro: la cuenta creada **y** su par de tokens.
+
+    El registro deja la sesión iniciada (decisión 0023), así que devuelve los mismos tokens que el
+    login **más** el usuario: el cliente que empieza a usarlos (el BFF del frontend) necesita su
+    perfil para construir la sesión y así se ahorra una petición extra a `GET /users/me`.
+    """
+
+    user: UserOut
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
 class UserUpdate(BaseModel):
+
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
     preferred_currency: str | None = Field(default=None, min_length=3, max_length=3)
     preferred_language: str | None = Field(default=None, max_length=10)

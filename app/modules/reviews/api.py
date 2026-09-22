@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.modules.identity.deps import get_current_user
+from app.modules.identity.deps import get_current_user, require_verified_email
 from app.modules.identity.models import User
 from app.modules.reviews.schemas import (
     AnswerCreate,
@@ -31,10 +31,14 @@ def get_review_service(session: AsyncSession = Depends(get_session)) -> ReviewSe
 @router.post("/reviews", response_model=ReviewOut, status_code=status.HTTP_201_CREATED)
 async def create_review(
     data: ReviewCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_verified_email),
     service: ReviewService = Depends(get_review_service),
 ) -> ReviewOut:
-    """Reseña un producto que compraste y recibiste (una reseña por producto)."""
+    """Reseña un producto que compraste y recibiste (una reseña por producto).
+
+    Publicar una reseña pasa por `require_verified_email`: con `REQUIRE_VERIFIED_EMAIL` encendido
+    hace falta el correo verificado (decisión 0023). Editar y borrar la propia reseña no lo exigen.
+    """
     return await service.create_review(user.id, data)
 
 
@@ -79,10 +83,14 @@ async def delete_review(
 async def ask_question(
     product_id: uuid.UUID,
     data: QuestionCreate,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_verified_email),
     service: ReviewService = Depends(get_review_service),
 ) -> QuestionOut:
-    """Pregunta públicamente algo sobre un producto."""
+    """Pregunta públicamente algo sobre un producto.
+
+    Publicar una pregunta pasa por `require_verified_email` (decisión 0023): las preguntas son
+    públicas y con el interruptor encendido solo las escribe quien verificó su correo.
+    """
     return await service.ask_question(user.id, product_id, data.body)
 
 

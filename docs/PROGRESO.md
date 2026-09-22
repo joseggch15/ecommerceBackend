@@ -305,5 +305,36 @@ decisiones: `docs/decisiones/0022-facetas-carrito-y-producto-por-slug.md`.
       con el mismo `revision` para no romper el historial de Alembic.
 - [x] Sigue pendiente (anotado, no inventado): `sold_count` (unidades vendidas) para la insignia «más vendido»,
       las URLs de imágenes (apartado 1), el listado público del catálogo para el sitemap (13) y el catálogo
-      público de códigos de error (4).
+      público de códigos de error (4). → **Los cuatro se cerraron el 22/09/2026: ver la sección siguiente.**
+
+## Cierre de la lista del frontend (22/09/2026) — COMPLETADO
+
+Encargo: apartados **6, 13 y 15** y el dato que faltaba para la interfaz (`sold_count`), más el descarte de los
+apartados **1 y 4**. Con esta tanda **la lista de `E:\ecommerce-web\docs\PENDIENTES-BACKEND.md` queda cerrada**:
+12 resueltos, 2 descartados por decisión del dueño y 1 (pagos reales) fuera de la lista. Detalle de las
+decisiones: `docs/decisiones/0023-cierre-lista-frontend.md`.
+
+- [x] **(6) Correo verificado como interruptor, apagado por defecto** (`REQUIRE_VERIFIED_EMAIL`, en `config.py` y
+      `.env.example`): el correo de verificación se sigue enviando y se puede canjear, pero **nada queda
+      bloqueado**. Con el interruptor encendido, vender (`POST /sellers/me` y todo lo que cuelga de
+      `get_approved_store`) y publicar (`POST /reviews`, `POST /products/{id}/questions`) exigen el correo
+      verificado y responden **403 `email_not_verified`**. El login y la compra nunca se bloquean. Apartado 6 —
+      **resuelto**.
+- [x] **(15) El registro deja la sesión iniciada**: `POST /auth/register` responde `RegisterOut`
+      (`user` + `access_token` + `refresh_token` + `token_type`) en la misma transacción, así que el BFF del
+      frontend guarda la sesión y fusiona el carrito del invitado sin una petición extra. Apartado 15 —
+      **resuelto**.
+- [x] **`sold_count` (unidades vendidas)**: subconsulta agregada sobre `order_items` de órdenes `paid`/`completed`
+      (`orders/repository.py::paid_units_subquery`), expuesta en `ProductSearchItem` y en `ProductOut`. Un
+      reembolso la baja. Índice nuevo `ix_order_items_product_id` (migración `8f0a63d4c1b9`).
+- [x] **(13) Listado público del catálogo para el sitemap**: `GET /api/v1/catalog/products/public` (público, por
+      cursor) con `q`, `cursor` y `limit` (100 por defecto, hasta 500); devuelve `id`, `slug`, `title` y
+      `updated_at` de los productos activos, del más reciente al más antiguo. Apartado 13 — **resuelto**.
+- [x] **(1) URLs de imágenes y (4) catálogo público de códigos de error**: **descartados** para el prototipo por
+      decisión del dueño (el proxy `/api/media/[key]` del frontend ya resuelve las imágenes y los `code` estables
+      se leen del código).
+- [x] **Cinco pruebas nuevas** (registro con tokens usables, el interruptor con el correo sin verificar y
+      verificado, `sold_count` con orden pagada y con reembolso, y el listado público paginado con su cursor
+      corrupto) y **dos adaptadas** al nuevo cuerpo del registro (`test_auth.py`).
+
 
