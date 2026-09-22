@@ -1,0 +1,21 @@
+# Configuración de pre-commit: se ejecuta automáticamente antes de cada commit.
+# Instálalo una sola vez con: uv run pre-commit install
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # mypy se ejecuta con el entorno del proyecto (uv) para tener acceso a las
+  # dependencias tipadas (sqlalchemy, pydantic, redis...).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy app tests
+        language: system
+        types: [python]
+        pass_filenames: false

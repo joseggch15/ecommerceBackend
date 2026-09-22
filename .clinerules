@@ -1,0 +1,59 @@
+# Reglas de trabajo para Cline en este proyecto
+
+## REGLAS TÉCNICAS NO NEGOCIABLES
+
+### Dinero y precios
+- Nunca usar float para dinero: Decimal en Python y NUMERIC en PostgreSQL, siempre con su código de moneda ISO 4217.
+- El servidor calcula siempre precios, descuentos, envío e impuestos. Jamás confiar en montos enviados por el cliente.
+- Cada línea de orden guarda una copia (snapshot) del nombre, precio y datos del producto al momento de la compra.
+- Los precios se guardan y se cobran en la moneda del vendedor (por defecto COP). La conversión a otras monedas es informativa para el comprador.
+
+### Concurrencia e integridad
+- Checkout, reserva de stock y pagos se ejecutan dentro de transacciones, con SELECT ... FOR UPDATE o bloqueo optimista.
+- Idempotencia: crear orden y crear pago aceptan un header Idempotency-Key; los webhooks de pago se procesan una sola vez aunque lleguen repetidos.
+- Las órdenes siguen una máquina de estados explícita. Las transiciones inválidas se rechazan.
+
+### Seguridad (basada en OWASP API Security Top 10)
+- Contraseñas con Argon2. Access token JWT de corta duración + refresh token rotativo y revocable.
+- Autorización en cada endpoint: un vendedor solo modifica sus propios productos; un comprador solo ve sus propias órdenes.
+- Rate limiting en login, registro, recuperación de contraseña y publicación de preguntas.
+- Validación estricta de toda entrada con Pydantic, CORS restringido, y cero secretos en el código: todo va en .env.
+- Nunca almacenar datos de tarjetas (la pasarela los tokeniza) y verificar la firma de cada webhook.
+
+### Diseño de la API
+- Versionada: /api/v1/...
+- Identificadores UUID en lugar de IDs numéricos consecutivos.
+- Paginación basada en cursor para listados grandes.
+- Un único formato de error en toda la API (RFC 9457 Problem Details) con un "code" estable para que el frontend lo traduzca.
+- Documentación OpenAPI completa: cada endpoint con descripción, ejemplos y códigos de respuesta.
+
+### Datos
+- Todas las tablas con created_at y updated_at en UTC, y borrado lógico (soft delete) para usuarios, tiendas y productos.
+- Índices diseñados para las consultas reales (búsqueda, filtros, listados por vendedor).
+
+### Observabilidad
+- Logs estructurados en JSON con un request_id que acompaña cada petición.
+- Endpoint de health check que verifica PostgreSQL y Redis.
+
+### Código
+- Nombres de variables, funciones, tablas y endpoints en inglés (estándar de la industria). Docstrings, comentarios y explicaciones en español.
+- Cada módulo con pruebas unitarias (lógica de negocio) y de integración (endpoints contra una base PostgreSQL de pruebas en Docker, no SQLite).
+
+## CÓMO DEBES TRABAJAR CONMIGO
+1. Una fase a la vez. Nunca avances a la siguiente sin mi aprobación explícita.
+2. Antes de escribir código en cada fase, muéstrame un plan corto: archivos, tablas y endpoints.
+3. Pasos pequeños. Pídeme permiso antes de crear archivos grandes o de ejecutar comandos que instalen, borren o modifiquen cosas.
+4. Si algo es ambiguo, pregúntame. No inventes requisitos de negocio.
+5. Usa solo librerías reales, mantenidas y en versiones estables. Si no estás seguro de cómo funciona la API de una librería, dilo en vez de adivinar.
+6. Después de cada cambio, ejecuta las pruebas y Ruff. Si algo falla, arréglalo antes de continuar.
+7. Explícame cada decisión importante como a alguien que está aprendiendo: qué hiciste, por qué, y qué alternativa descartaste.
+8. Mantén actualizados docs/PROGRESO.md (qué está hecho, qué falta, próximos pasos) y docs/decisiones/ (una nota corta por cada decisión de arquitectura).
+
+## DECISIONES DE NEGOCIO CONFIRMADAS
+- Nombre del proyecto: marketplace-api (raíz del repo: E:\ecommerce).
+- País/moneda base: Colombia / COP.
+- Multi-moneda: detección por ubicación del usuario + API de tasas de cambio; conversión informativa (los cobros siempre en la moneda del vendedor).
+- Idioma: la API responde en inglés; la interfaz se adapta al idioma de la ubicación (el usuario puede cambiarlo).
+- Zona horaria: adaptada a la ubicación; internamente todo se guarda en UTC.
+- Pasarelas: Mercado Pago y Stripe (sandbox). Llaves como placeholders en .env.example hasta la Fase 7.
+- Puertos locales: PostgreSQL en 5433 (el 5432 lo ocupa un PostgreSQL local) y Redis en 6379.
