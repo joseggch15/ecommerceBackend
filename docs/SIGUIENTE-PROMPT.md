@@ -19,14 +19,15 @@ Pega esto al abrir una tarea nueva en `E:\ecommerce`. Es corto a propósito: **l
 
 ## Estado (22/09/2026)
 
-De los **15 apartados** de `E:\ecommerce-web\docs/PENDIENTES-BACKEND.md`: resueltos el **2** (Mercado Pago), **8**
-(claves de imagen con punto), **10** (stock y atributos en las variantes) y **11** (tienda pública y envío
-estimado); el **1** queda parcial. Últimos commits: `9f49103` (pagos), `48c9827` (catálogo público).
+De los **15 apartados** de `E:\ecommerce-web\docs/PENDIENTES-BACKEND.md`: resueltos el **8**, el **10** y el
+**11**; el **1** queda parcial y el **2** (pagos reales) **sale de la lista** por decisión del dueño
+(`docs/decisiones/0020-prototipo-sin-pagos-reales.md`: el prototipo no cobra dinero real). Últimos commits:
+`9f49103` (pagos), `48c9827` (catálogo público), `6bd5302` (docs).
 Entorno: backend en `127.0.0.1:8000`, vista previa en `http://localhost:3001/es`.
 
 ## Trabajo pendiente, en este orden
 
-### 1. Correos reales (apartado 5) — lo que más valor tiene
+### 1. Correos reales con Mailpit (apartado 5) — PRIORIDAD 1
 
 - Hoy los tokens de verificación y de recuperación **solo se escriben en los logs** (`AuthService`): no sale
   ningún correo.
@@ -53,24 +54,19 @@ Entorno: backend en `127.0.0.1:8000`, vista previa en `http://localhost:3001/es`
   búsqueda.
 - **(4)** Publicar el catálogo de códigos de error estable (por ejemplo `docs/ERRORES.md`).
 
-### 3. El resto
+### 3. El resto (solo si sobra contexto)
 
-- **(5/6)** `email_not_verified` si el dueño decide exigir verificación para comprar (es su decisión: pregúntale
-  solo esto, o déjalo pendiente y anótalo).
+- **(6)** `email_not_verified` si el dueño decide exigir verificación para comprar (es su decisión: si no lo ha
+  dicho, déjalo pendiente y anótalo).
 - **(15)** Devolver tokens (o iniciar sesión) en el registro.
-- **Stripe** como adaptador secundario, **solo si todo lo anterior está terminado**.
+- **(13) sitemap completo** y **(4) catálogo público de códigos de error**: son los últimos de la lista.
+- **Nada de pagos:** no implementes Stripe ni sigas afinando Mercado Pago (decisión 0020).
 - Cierre: `uv run pytest -q`, `uv run ruff check app tests`, `uv run mypy app tests`, actualizar
   `docs/PROGRESO.md` y el `PENDIENTES-BACKEND.md` del frontend, commit y push en ambos repositorios.
 
-## Aviso que no se puede olvidar (Mercado Pago)
+## Pagos: congelados (decisión 0020)
 
-⚠️ La documentación oficial de Mercado Pago **no fue accesible** desde este entorno, así que tres detalles del
-protocolo quedaron **en configuración** con sus valores por defecto:
-
-1. `MERCADOPAGO_SIGNATURE_HEADER` (`x-signature`) y su formato (`ts=...,v1=...`).
-2. `MERCADOPAGO_SIGNATURE_TEMPLATE` (`id:{data_id};request-id:{request_id};ts:{ts};`).
-3. `MERCADOPAGO_AMOUNT_MODE` (`integer`: monto sin centavos para COP).
-
-**Confírmalos con la documentación oficial antes de cobrar de verdad**; si cambian, se corrigen en `.env` sin
-tocar código. El proveedor por defecto sigue siendo `sandbox` (con `PAYMENT_PROVIDER=mercadopago` y sin token, la
-API responde 503 `payment_provider_not_configured`). Decisión completa: `docs/decisiones/0019-pagos-mercado-pago.md`.
+El adaptador de Mercado Pago (`app/modules/payments/mercadopago.py`) queda como pieza **opcional, apagada y sin
+configurar**: no hay que crear credenciales, no se implementa Stripe y no se afina nada más de pagos. El
+proveedor por defecto es `sandbox` (simula pagos sin dinero real). Detalles del protocolo y del día que se cobre
+de verdad: `docs/decisiones/0019-pagos-mercado-pago.md`.

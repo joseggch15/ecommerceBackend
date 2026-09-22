@@ -239,7 +239,10 @@ empezando por pagos, datos públicos de tienda y envío, y stock y atributos de 
 - **Mejoras de tienda:** conteos por faceta (3), catálogo público de códigos de error (4), reputación y tienda en
   los resultados de búsqueda (7), producto por slug (9), paginación de preguntas (12), listado para el sitemap
   (13) y avisos de precio/stock en el carrito (14).
-- **El resto:** exigir correo verificado para comprar (6, decisión del dueño), tokens en el registro (15),
-  **adaptador de Stripe** (secundario, solo si el resto está terminado) y la **suite completa** de pruebas
-  (`uv run pytest -q`) más **mypy**.
+- **El resto (solo si sobra contexto):** exigir correo verificado para comprar (6, decisión del dueño), tokens en
+  el registro (15), sitemap completo (13) y catálogo público de códigos de error (4), más la **suite completa**
+  (`uv run pytest -q`) y **mypy**.
+- **Pagos: CONGELADOS** (decisión `0020-prototipo-sin-pagos-reales.md`): el prototipo no cobra dinero real, el
+  adaptador de Mercado Pago queda opcional y sin configurar y **no se implementa Stripe**. La F6 se hace con la
+  pasarela de prueba y el checkout se marca como «modo de prueba».
 
