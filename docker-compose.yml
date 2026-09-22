@@ -43,7 +43,22 @@ services:
     volumes:
       - minio_data:/data
 
+  # Buzón de correo de desarrollo: la API le entrega los correos por SMTP (1025) y se leen en la
+  # interfaz web (http://localhost:8025). No envía nada a Internet.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: marketplace_mailpit
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "1025:1025"   # SMTP (SMTP_HOST/SMTP_PORT de la API en desarrollo)
+      - "8025:8025"   # Interfaz web (http://localhost:8025)
+    volumes:
+      - mailpit_data:/data
+
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+  mailpit_data:

@@ -6,10 +6,12 @@ from collections.abc import Awaitable, Callable
 import jwt
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.errors import AppError
+from app.core.redis import get_redis
 from app.core.security import decode_access_token
 from app.modules.identity.models import User, UserRole
 from app.modules.identity.repository import UserRepository
@@ -18,9 +20,12 @@ from app.modules.identity.service import AuthService, UserService
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_auth_service(session: AsyncSession = Depends(get_session)) -> AuthService:
-    """Provee el servicio de autenticación."""
-    return AuthService(session)
+def get_auth_service(
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> AuthService:
+    """Provee el servicio de autenticación (con Redis, para encolar los correos)."""
+    return AuthService(session, redis)
 
 
 def get_user_service(session: AsyncSession = Depends(get_session)) -> UserService:

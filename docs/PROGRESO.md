@@ -234,15 +234,47 @@ empezando por pagos, datos públicos de tienda y envío, y stock y atributos de 
 
 ### Lo que queda de la lista (para la siguiente tarea)
 
-- **Correos reales** (apartado 5): SMTP configurable desde `.env`, plantillas en español e inglés según
-  `preferred_language` y **Mailpit** en `docker-compose.yml` (SMTP 1025, web 8025).
 - **Mejoras de tienda:** conteos por faceta (3), catálogo público de códigos de error (4), reputación y tienda en
   los resultados de búsqueda (7), producto por slug (9), paginación de preguntas (12), listado para el sitemap
   (13) y avisos de precio/stock en el carrito (14).
 - **El resto (solo si sobra contexto):** exigir correo verificado para comprar (6, decisión del dueño), tokens en
-  el registro (15), sitemap completo (13) y catálogo público de códigos de error (4), más la **suite completa**
-  (`uv run pytest -q`) y **mypy**.
+  el registro (15), sitemap completo (13) y catálogo público de códigos de error (4).
 - **Pagos: CONGELADOS** (decisión `0020-prototipo-sin-pagos-reales.md`): el prototipo no cobra dinero real, el
   adaptador de Mercado Pago queda opcional y sin configurar y **no se implementa Stripe**. La F6 se hace con la
   pasarela de prueba y el checkout se marca como «modo de prueba».
+
+## Correos reales con Mailpit (22/09/2026) — COMPLETADO
+
+Encargo: apartado **5** de `E:\ecommerce-web\docs/PENDIENTES-BACKEND.md` (prioridad 1). Hasta ahora los tokens de
+verificación de correo y de recuperación **solo se escribían en el log**: no salía ningún correo y el usuario no
+podía completar el flujo desde el enlace del email.
+
+- [x] **Remitente SMTP** (`app/core/email.py`): `SmtpEmailSender` con `aiosmtplib` **5.1.3** (firma verificada
+      contra la librería instalada), elegido con `EMAIL_SENDER=smtp`. Host, puerto, usuario, contraseña, TLS y
+      remitente configurables; el valor por defecto sigue siendo `logging`.
+- [x] **Variables nuevas** (documentadas en `.env.example`): `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+      `SMTP_PASSWORD`, `SMTP_USE_TLS`, `SMTP_FROM`, `SMTP_TIMEOUT_SECONDS`, `FRONTEND_URL` y las dos del worker.
+- [x] **Mailpit** en `docker-compose.yml` (SMTP 1025, interfaz web **http://localhost:8025**, volumen propio).
+- [x] **Plantillas en español e inglés** (`app/core/email_templates.py`), texto plano, con el idioma del
+      `preferred_language` del perfil (acepta `en-US`) y respaldo al idioma de la plataforma. Enlaces a
+      `{FRONTEND_URL}/{idioma}/verify-email?token=...` y `.../reset-password?token=...`, las rutas que ya existen
+      en el frontend.
+- [x] **El correo viaja por la cola que ya existía**: la fila de `notifications` guarda el asunto (`title`) y el
+      cuerpo (`body`) renderizados y el worker la envía. Dos tipos nuevos (`email_verification`, `password_reset`)
+      marcados como **solo correo** (`EMAIL_ONLY_TYPES`) para que no salgan en la campana in-app.
+- [x] **Migración `e7c9474064ee`** aplicada: `notifications.type` pasa de `VARCHAR(15)` a `VARCHAR(18)`
+      (`email_verification` es más largo que `order_delivered`).
+- [x] **Los tokens dejan de escribirse en el log** (regla de seguridad): ya viajan dentro del correo.
+- [x] **Worker de correos dentro del proceso de la API** (`app/modules/notifications/worker.py`, **apagado por
+      defecto**): con `NOTIFICATION_WORKER_ENABLED=true` en el `.env` de desarrollo los correos salen solos cada
+      5 s, así que la demo funciona sin llamar a `POST /admin/notifications/process`. En producción sigue siendo
+      un proceso aparte (decisión 0015).
+- [x] **17 pruebas nuevas** (7 de `core/email`, 6 de plantillas, 2 de integración que registran un usuario,
+      procesan la cola y **canjean el token del enlace del correo**) más 2 del worker. El `conftest` fuerza
+      `EMAIL_SENDER=logging` **antes** de importar la configuración: ninguna prueba abre una conexión SMTP.
+- [x] Comprobado **en vivo** (no solo con dobles): un correo real enviado por SMTP llegó a Mailpit, y registrarse
+      contra la API de desarrollo (con el worker encendido) dejó el correo en `http://localhost:8025`.
+- [x] Decisión `0021-correos-smtp-plantillas-y-mailpit.md`.
+- [x] `.env` de esta máquina apuntando a Mailpit (`EMAIL_SENDER=smtp`, `FRONTEND_URL=http://localhost:3001` para
+      que los enlaces abran la vista previa del dueño) y worker encendido.
 

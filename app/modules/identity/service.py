@@ -3,9 +3,19 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.email_templates import (
+    RESET_PASSWORD_PATH,
+    VERIFY_EMAIL_PATH,
+    EmailTemplate,
+    frontend_link,
+    humanize_minutes,
+    render_email,
+    resolve_language,
+)
 from app.core.errors import AppError
 from app.core.logging import get_logger
 from app.core.security import (
@@ -37,8 +47,17 @@ from app.modules.identity.schemas import (
     TokenPair,
     UserUpdate,
 )
+from app.modules.notifications.models import NotificationType
+from app.modules.notifications.service import NotificationService
 
 logger = get_logger(__name__)
+
+# Cada plantilla de correo tiene su tipo de notificación (el `type` que queda en la fila y que
+# `EMAIL_ONLY_TYPES` mantiene fuera de la campana del frontend).
+_TEMPLATE_NOTIFICATION_TYPES: dict[EmailTemplate, NotificationType] = {
+    EmailTemplate.EMAIL_VERIFICATION: NotificationType.EMAIL_VERIFICATION,
+    EmailTemplate.PASSWORD_RESET: NotificationType.PASSWORD_RESET,
+}
 
 
 def _utcnow() -> datetime:
@@ -49,8 +68,9 @@ def _utcnow() -> datetime:
 class AuthService:
     """Casos de uso de autenticación (registro, login, tokens, verificación)."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, redis: Redis | None = None) -> None:
         self._session = session
+        self._redis = redis
         self._users = UserRepository(session)
         self._refresh_tokens = RefreshTokenRepository(session)
         self._user_tokens = UserTokenRepository(session)
@@ -79,11 +99,17 @@ class AuthService:
             )
         )
 
-        await self._session.commit()
+        # El correo de confirmación va a la cola de notificaciones: se envía en segundo plano, así
+        # que el registro responde sin esperar al servidor de correo.
+        await self._queue_email(
+            user=user,
+            kind=EmailTemplate.EMAIL_VERIFICATION,
+            path=VERIFY_EMAIL_PATH,
+            token=token,
+            expires_minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES,
+        )
 
-        # Email simulado: el token se muestra en logs para pruebas manuales.
-        # En la Fase 11 se enviará por email de verdad.
-        logger.info("email_verification_token_generated", email=user.email, token=token)
+        await self._session.commit()
         return user
 
     async def login(self, email: str, password: str) -> TokenPair:
@@ -146,8 +172,14 @@ class AuthService:
                 + timedelta(minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES),
             )
         )
+        await self._queue_email(
+            user=user,
+            kind=EmailTemplate.EMAIL_VERIFICATION,
+            path=VERIFY_EMAIL_PATH,
+            token=token,
+            expires_minutes=settings.EMAIL_VERIFICATION_EXPIRE_MINUTES,
+        )
         await self._session.commit()
-        logger.info("email_verification_token_generated", email=user.email, token=token)
 
     async def request_password_reset(self, email: str) -> None:
         user = await self._users.get_by_email(email)
@@ -162,8 +194,14 @@ class AuthService:
                     + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES),
                 )
             )
+            await self._queue_email(
+                user=user,
+                kind=EmailTemplate.PASSWORD_RESET,
+                path=RESET_PASSWORD_PATH,
+                token=token,
+                expires_minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES,
+            )
             await self._session.commit()
-            logger.info("password_reset_token_generated", email=user.email, token=token)
 
     async def reset_password(self, token: str, new_password: str) -> None:
         stored = await self._user_tokens.get_by_hash(hash_token(token), TokenType.PASSWORD_RESET)
@@ -179,6 +217,46 @@ class AuthService:
         # Por seguridad, al cambiar la contraseña se revocan todas las sesiones.
         await self._refresh_tokens.revoke_all_for_user(user.id)
         await self._session.commit()
+
+    async def _queue_email(
+        self,
+        *,
+        user: User,
+        kind: EmailTemplate,
+        path: str,
+        token: str,
+        expires_minutes: int,
+    ) -> None:
+        """Deja el correo transaccional en la cola de notificaciones (**no** hace commit).
+
+        El asunto y el cuerpo del correo son el `title` y el `body` de la notificación, así que el
+        worker (`POST /admin/notifications/process`) los envía tal cual con el `EmailSender`
+        configurado. El idioma sale del perfil del usuario y el enlace apunta al frontend, que es
+        quien canjea el token contra la API.
+        """
+        if self._redis is None:
+            # Sin Redis no hay cola (ocurre en pruebas unitarias que construyen el servicio a mano).
+            logger.info("auth_email_not_queued", email=user.email, kind=kind.value)
+            return
+
+        profile = user.profile
+        language = resolve_language(profile.preferred_language if profile else None)
+        rendered = render_email(
+            kind,
+            language=language,
+            full_name=(profile.full_name if profile else None) or user.email,
+            site_name=settings.PROJECT_NAME,
+            link=frontend_link(locale=language, path=path, token=token),
+            expires=humanize_minutes(expires_minutes, language=language),
+        )
+        await NotificationService(self._session, self._redis).notify(
+            user_id=user.id,
+            type=_TEMPLATE_NOTIFICATION_TYPES[kind],
+            title=rendered.subject,
+            body=rendered.body,
+            data={"template": kind.value},
+            email_to=user.email,
+        )
 
     async def _issue_token_pair(self, user: User) -> tuple[TokenPair, RefreshToken]:
         access_token = create_access_token(str(user.id))

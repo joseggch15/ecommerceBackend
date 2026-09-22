@@ -100,9 +100,27 @@ class Settings(BaseSettings):
     SHIPPING_INTERNATIONAL_TRANSIT_DAYS_MAX: int = 15
     SHIPPING_FREE: bool = True
 
-    # Notificaciones (remitente de email: "logging" en desarrollo)
+    # URL pública del frontend: con ella se construyen los enlaces que van dentro de los correos
+    # (`{FRONTEND_URL}/{idioma}/verify-email?token=...`).
+    FRONTEND_URL: str = "http://localhost:3000"
+
+    # Notificaciones y correos (remitente: "logging" en desarrollo; "smtp" apunta a Mailpit)
     EMAIL_SENDER: str = "logging"
     EMAIL_FROM: str = "no-reply@marketplace.local"
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025  # Mailpit escucha aquí en desarrollo (su interfaz web está en 8025)
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    # TLS directo (cifrado desde el principio, típico del puerto 465). Con STARTTLS (587 o el
+    # 1025 de Mailpit) se deja en false: la librería lo activa si el servidor lo anuncia.
+    SMTP_USE_TLS: bool = False
+    # Remitente del sobre SMTP: si está vacío se usa `EMAIL_FROM`.
+    SMTP_FROM: str = ""
+    SMTP_TIMEOUT_SECONDS: int = 10
+    # Worker de correos dentro del proceso de la API (solo para desarrollo: en producción corre
+    # aparte). Ver `app/modules/notifications/worker.py`.
+    NOTIFICATION_WORKER_ENABLED: bool = False
+    NOTIFICATION_WORKER_INTERVAL_SECONDS: float = 5.0
 
     # Endurecimiento (Fase 13)
     ALLOWED_HOSTS: list[str] = ["*"]

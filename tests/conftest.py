@@ -1,7 +1,12 @@
 """Fixtures compartidas de pytest."""
 
 import asyncio
+import os
 from collections.abc import AsyncIterator, Iterator
+
+# Las pruebas **nunca** envían correos de verdad: la variable de entorno manda sobre el `.env`
+# (pydantic-settings), así que se fija antes de importar la configuración de la aplicación.
+os.environ["EMAIL_SENDER"] = "logging"
 
 import asyncpg  # type: ignore[import-untyped]  # asyncpg no distribuye stubs de tipos
 import pytest

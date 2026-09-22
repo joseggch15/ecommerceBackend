@@ -25,6 +25,17 @@ class NotificationType(enum.StrEnum):
     ORDER_DELIVERED = "order_delivered"
     ORDER_CANCELLED = "order_cancelled"
     WELCOME = "welcome"
+    # Tipos de correo transaccional: la fila existe para enviar el email (ver `EMAIL_ONLY_TYPES`).
+    EMAIL_VERIFICATION = "email_verification"
+    PASSWORD_RESET = "password_reset"
+
+
+# Tipos que **solo** son correo: no se muestran en la campana del frontend (`GET /notifications`),
+# porque no son un aviso de nada que el usuario tenga que mirar dentro de la aplicación.
+EMAIL_ONLY_TYPES: tuple[NotificationType, ...] = (
+    NotificationType.EMAIL_VERIFICATION,
+    NotificationType.PASSWORD_RESET,
+)
 
 
 class EmailStatus(enum.StrEnum):

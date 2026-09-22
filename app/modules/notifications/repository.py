@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.notifications.models import Notification
+from app.modules.notifications.models import EMAIL_ONLY_TYPES, Notification
 
 
 class NotificationRepository:
@@ -28,9 +28,10 @@ class NotificationRepository:
     async def list_for_user(
         self, user_id: uuid.UUID, *, only_unread: bool, limit: int
     ) -> list[Notification]:
+        # Los correos transaccionales (verificación, recuperación) no son avisos in-app.
         stmt = (
             select(Notification)
-            .where(Notification.user_id == user_id)
+            .where(Notification.user_id == user_id, Notification.type.notin_(EMAIL_ONLY_TYPES))
             .order_by(Notification.created_at.desc())
             .limit(limit)
         )
@@ -42,7 +43,9 @@ class NotificationRepository:
     async def count_unread(self, user_id: uuid.UUID) -> int:
         count = await self._session.scalar(
             select(func.count(Notification.id)).where(
-                Notification.user_id == user_id, Notification.read_at.is_(None)
+                Notification.user_id == user_id,
+                Notification.read_at.is_(None),
+                Notification.type.notin_(EMAIL_ONLY_TYPES),
             )
         )
         return int(count or 0)

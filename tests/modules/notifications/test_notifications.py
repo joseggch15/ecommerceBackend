@@ -160,6 +160,8 @@ async def test_email_queue_is_processed(
         "/api/v1/admin/notifications/emails", headers=_auth(ctx["admin"])
     )
     assert emails.status_code == 200
+    # El más reciente es el del pago (en la cola van también los correos de verificación del alta).
+    assert emails.json()[0]["type"] == "order_paid"
     assert emails.json()[0]["email_to"] == "buyer@example.com"
     assert emails.json()[0]["email_status"] == "queued"
 
@@ -168,7 +170,7 @@ async def test_email_queue_is_processed(
     )
     assert processed.status_code == 200, processed.text
     result = processed.json()
-    assert result["sent"] == 1
+    assert result["sent"] >= 1
     assert result["pending"] == 0
 
     after = await integration_client.get(
