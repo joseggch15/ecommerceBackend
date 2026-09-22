@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,4 +29,21 @@ class StoreOut(BaseModel):
     description: str | None
     logo_url: str | None
     status: StoreStatus
+    created_at: datetime
+
+
+class PublicStoreOut(BaseModel):
+    """Datos públicos de una tienda: los que puede ver cualquier visitante, sin sesión.
+
+    No incluye `user_id` ni `status`: al comprador no le dicen nada y son datos internos.
+    """
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    description: str | None
+    logo_url: str | None
+    rating_average: Decimal | None
+    rating_count: int
+    orders_delivered: int
     created_at: datetime

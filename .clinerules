@@ -57,3 +57,57 @@
 - Zona horaria: adaptada a la ubicación; internamente todo se guarda en UTC.
 - Pasarelas: Mercado Pago y Stripe (sandbox). Llaves como placeholders en .env.example hasta la Fase 7.
 - Puertos locales: PostgreSQL en 5433 (el 5432 lo ocupa un PostgreSQL local) y Redis en 6379.
+
+---
+
+## REGLAS OPERATIVAS (heredadas del proyecto frontend `E:\ecommerce-web`)
+
+Estas reglas son obligatorias y **sustituyen a los puntos 3 y 4 de «Cómo debes trabajar conmigo» en lo que
+respecta a decisiones de flujo**: el trabajo es autónomo, sin preguntas de flujo, y el dueño no está disponible
+mientras dure la tarea.
+
+### Credenciales (nunca)
+- **Nunca leas credenciales guardadas** (Administrador de credenciales de Windows, `git credential fill`,
+  tokens de otras aplicaciones, navegadores, ni variables de entorno con secretos) **ni las uses para llamar a
+  APIs**. `git push` de forma normal **sí** está permitido. Si algo requiere una autenticación que no tienes,
+  **detente en ese punto**, anótalo en el resumen y sigue con lo demás.
+
+### Reglas de terminal
+- **Ningún comando largo de una sola línea.** Si hacen falta más de dos comandos, escribe un script `.ps1` en
+  `%TEMP%` y ejecútalo así: `powershell -NoProfile -ExecutionPolicy Bypass -File <ruta>`.
+- **Redirige siempre la salida a un archivo** de `%TEMP%` y lee solo las últimas 30 líneas o solo las líneas de
+  error (`Select-String -Pattern 'error|failed|exit='`).
+- **PowerShell 5.1:** `Set-Content -Encoding utf8` **añade BOM** y rompe `JSON.parse`; para reescribir un archivo
+  usa `[System.IO.File]::WriteAllText($ruta, $texto, (New-Object System.Text.UTF8Encoding($false)))`.
+- **Procesos en segundo plano:** `Start-Process` con `-WindowStyle Hidden` y salida redirigida. **Detener lo que
+  escucha en un puerto:** `Get-NetTCPConnection -LocalPort <puerto> -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`.
+- Comprueba los **códigos de salida** (`$LASTEXITCODE`) después de cada tanda.
+
+### Esperar procesos largos (obligatorio)
+1. Todo script largo escribe como **última línea** de su archivo de salida: `FIN exit=<código>`.
+2. Se espera con `%TEMP%\esperar.ps1 -Archivo <archivo> -Intento <n>`: revisa cada 10 s, imprime
+   `esperando <segundos>s (intento <n>)`, termina al encontrar `FIN` o a los 8 minutos, y muestra solo las
+   últimas 15 líneas.
+3. **Sube `-Intento` en cada llamada.** Máximo **6 intentos** por proceso.
+4. **Nunca leas dos veces seguidas el mismo archivo.** Si un intento termina sin `FIN`, usa `esperar.ps1`.
+5. Si tras 6 intentos no hay `FIN`, comprueba si el proceso sigue vivo; si está colgado, deténlo, anótalo y sigue.
+
+### Eficiencia (ahorro de contexto y tokens)
+- **Umbral de contexto: 250k tokens.** Al acercarte, **detente con el proyecto funcionando y todo commiteado**,
+  actualiza `docs/PROGRESO.md` y escribe `docs/SIGUIENTE-PROMPT.md` con el mensaje completo para continuar
+  (incluidas estas reglas).
+- Durante el desarrollo ejecuta **solo las pruebas de lo que cambiaste**. La **suite completa, Ruff y mypy** se
+  ejecutan **una vez al final**, y otra vez solo si hubo correcciones.
+- **Sin preguntas de flujo:** si hay dos opciones razonables, elige la recomendada, **regístrala en
+  `docs/decisiones/`** y sigue.
+- El resumen final no pasa de **25 líneas**.
+- **`git push` tras cada cierre** (copia de seguridad).
+
+### Vista previa del dueño (puerto 3001)
+- Al empezar cada tarea, comprueba si algo escucha en el **3001**. Si no, levanta en segundo plano el backend
+  (si no está encendido) y `pnpm dev -p 3001` en `E:\ecommerce-web`. **Al terminar la tarea, déjalos encendidos.**
+- El **3001 es solo para la vista previa**: nunca lo uses para pruebas ni lo detengas. Las pruebas usan el 3000.
+- **No borres `.next`** mientras la vista previa esté encendida; si necesitas una compilación limpia, detén la
+  vista previa, limpia y vuelve a levantarla.
+- Cada vez que termines una pantalla o un cambio visible, **escribe la URL exacta en el 3001**.
+

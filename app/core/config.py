@@ -71,6 +71,17 @@ class Settings(BaseSettings):
     PAYMENT_WEBHOOK_SECRET: str = "dev-webhook-secret"
     PAYMENT_CHECKOUT_BASE_URL: str = "https://sandbox.marketplace.local/checkout"
 
+    # Envíos: estimación configurable (ver `app/modules/shipping/estimates.py`). Hoy no hay
+    # tarifas por zona ni transportadora integrada: la fecha estimada sale de estos valores y
+    # lo declara el campo `source` de la respuesta.
+    SHIPPING_ORIGIN_COUNTRY: str = "CO"
+    SHIPPING_HANDLING_DAYS: int = 1
+    SHIPPING_TRANSIT_DAYS_MIN: int = 2
+    SHIPPING_TRANSIT_DAYS_MAX: int = 5
+    SHIPPING_INTERNATIONAL_TRANSIT_DAYS_MIN: int = 7
+    SHIPPING_INTERNATIONAL_TRANSIT_DAYS_MAX: int = 15
+    SHIPPING_FREE: bool = True
+
     # Notificaciones (remitente de email: "logging" en desarrollo)
     EMAIL_SENDER: str = "logging"
     EMAIL_FROM: str = "no-reply@marketplace.local"

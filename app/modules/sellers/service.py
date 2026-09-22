@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.modules.sellers.models import Store, StoreStatus
 from app.modules.sellers.repository import StoreRepository
-from app.modules.sellers.schemas import StoreCreate, StoreUpdate
+from app.modules.sellers.schemas import PublicStoreOut, StoreCreate, StoreUpdate
 from app.shared.text import slugify
 
 
@@ -53,6 +53,28 @@ class SellerService:
 
     async def list_stores(self, status: StoreStatus | None) -> list[Store]:
         return await self._stores.list(status)
+
+    async def get_public_store(self, store_id: uuid.UUID) -> PublicStoreOut:
+        """Datos públicos de una tienda **aprobada** (sin sesión).
+
+        Una tienda pendiente, rechazada o suspendida no existe para el público: responde 404 igual
+        que una que no existe, en lugar de revelar el estado interno del vendedor.
+        """
+        store = await self._stores.get_by_id(store_id)
+        if store is None or store.status != StoreStatus.APPROVED:
+            raise AppError(404, "store_not_found", "Store not found.")
+
+        return PublicStoreOut(
+            id=store.id,
+            name=store.name,
+            slug=store.slug,
+            description=store.description,
+            logo_url=store.logo_url,
+            rating_average=store.rating_average,
+            rating_count=store.rating_count,
+            orders_delivered=await self._stores.count_delivered_orders(store.id),
+            created_at=store.created_at,
+        )
 
     async def approve(self, store_id: uuid.UUID) -> Store:
         store = await self._stores.get_by_id(store_id)

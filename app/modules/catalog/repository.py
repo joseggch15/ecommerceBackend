@@ -1,6 +1,7 @@
 """Repositorios del módulo de catálogo."""
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,3 +207,22 @@ class VariantValueRepository:
         self._session.add(value)
         await self._session.flush()
         return value
+
+    async def list_for_variants(
+        self, variant_ids: Sequence[uuid.UUID]
+    ) -> list[tuple[uuid.UUID, uuid.UUID, str, str]]:
+        """Valores de atributo de varias variantes en **una** consulta, con el nombre del atributo.
+
+        Devuelve `(variant_id, attribute_id, attribute_name, value)`. Se hace de una vez (y no
+        variante por variante) para que la ficha de producto no necesite N+1 consultas.
+        """
+        if not variant_ids:
+            return []
+
+        result = await self._session.execute(
+            select(VariantValue.variant_id, Attribute.id, Attribute.name, VariantValue.value)
+            .join(Attribute, VariantValue.attribute_id == Attribute.id)
+            .where(VariantValue.variant_id.in_(variant_ids), Attribute.deleted_at.is_(None))
+            .order_by(Attribute.name)
+        )
+        return [(row[0], row[1], row[2], row[3]) for row in result.all()]

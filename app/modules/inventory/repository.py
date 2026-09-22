@@ -1,6 +1,7 @@
 """Repositorios del módulo de inventario."""
 
 import uuid
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,3 +33,24 @@ class InventoryRepository:
         self._session.add(movement)
         await self._session.flush()
         return movement
+
+    async def list_levels(
+        self, variant_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[int, int]]:
+        """Stock de varias variantes en una consulta: `{variant_id: (total, disponible)}`.
+
+        Las variantes que no tienen fila de inventario **no aparecen** en el diccionario: quien
+        consulte debe tratarlas como 0 disponibles (no hay nada que vender).
+        """
+        if not variant_ids:
+            return {}
+
+        result = await self._session.execute(
+            select(
+                InventoryItem.variant_id, InventoryItem.quantity, InventoryItem.reserved_quantity
+            ).where(InventoryItem.variant_id.in_(variant_ids))
+        )
+        return {
+            row[0]: (row[1], row[1] - row[2])
+            for row in result.all()
+        }

@@ -34,6 +34,19 @@ def generate_presigned_upload_url(object_key: str, content_type: str | None = No
     return str(_s3_client.generate_presigned_url("put_object", Params=params, ExpiresIn=3600))
 
 
-def new_object_key(extension: str = "") -> str:
-    """Genera una clave de objeto única dentro del bucket."""
-    return f"products/{uuid.uuid4().hex}{extension}"
+def new_object_key(extension: str = "", prefix: str = "products") -> str:
+    """Genera una clave de objeto única dentro del bucket.
+
+    La extensión se normaliza **con el punto delante** (`products/<32 hex>.jpg`): el proxy de
+    medios del frontend valida las claves con una lista blanca que exige la extensión tras el
+    punto, así que sin él todas las imágenes reales se rechazan (apartado 8 de los pendientes).
+
+    El prefijo se parametriza porque los logos de tienda viven en `stores/` y los productos en
+    `products/` (antes todo se guardaba bajo `products/`, incluso los logos).
+    """
+    clean_prefix = prefix.strip().strip("/").lower() or "products"
+    clean_extension = extension.strip().lower()
+    if clean_extension and not clean_extension.startswith("."):
+        clean_extension = f".{clean_extension}"
+
+    return f"{clean_prefix}/{uuid.uuid4().hex}{clean_extension}"

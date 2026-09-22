@@ -2,9 +2,10 @@
 
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.orders.models import SellerOrder, SellerOrderStatus
 from app.modules.sellers.models import Store, StoreStatus
 
 
@@ -43,3 +44,15 @@ class StoreRepository:
             stmt = stmt.where(Store.status == status)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_delivered_orders(self, store_id: uuid.UUID) -> int:
+        """Sub-órdenes **entregadas** de la tienda (reputación que se enseña en la ficha)."""
+        result = await self._session.execute(
+            select(func.count())
+            .select_from(SellerOrder)
+            .where(
+                SellerOrder.store_id == store_id,
+                SellerOrder.status == SellerOrderStatus.DELIVERED,
+            )
+        )
+        return int(result.scalar_one())

@@ -96,6 +96,14 @@ class ProductUpdate(BaseModel):
     brand: str | None = Field(default=None, max_length=120)
 
 
+class VariantValueOut(BaseModel):
+    """Valor de atributo de una variante (color: negro, talla: M)."""
+
+    attribute_id: uuid.UUID
+    name: str
+    value: str
+
+
 class VariantOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -103,6 +111,10 @@ class VariantOut(BaseModel):
     sku: str
     price: Decimal
     compare_at_price: Decimal | None
+    # Stock real de la variante (tabla de inventario): total y disponible para vender.
+    stock: int = 0
+    available: int = 0
+    attribute_values: list[VariantValueOut] = Field(default_factory=list)
 
 
 class ProductImageOut(BaseModel):
@@ -126,6 +138,8 @@ class ProductOut(BaseModel):
     brand: str | None
     status: ProductStatus
     created_at: datetime
+    # Suma del stock disponible de todas las variantes (para la ficha y los listados).
+    total_available: int = 0
     variants: list[VariantOut] = Field(default_factory=list)
     images: list[ProductImageOut] = Field(default_factory=list)
 

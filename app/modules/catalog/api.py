@@ -2,7 +2,7 @@
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -29,6 +29,7 @@ from app.modules.identity.deps import require_roles
 from app.modules.identity.models import User, UserRole
 from app.modules.sellers.deps import get_approved_store
 from app.modules.sellers.models import Store
+from app.modules.shipping.estimates import ShippingEstimateOut
 
 router = APIRouter(tags=["catalog"])
 
@@ -179,6 +180,27 @@ async def get_product(
     service: ProductService = Depends(get_product_service),
 ) -> ProductOut:
     return await service.get_product(product_id)
+
+
+@router.get("/catalog/products/{product_id}/shipping", response_model=ShippingEstimateOut)
+async def get_product_shipping(
+    product_id: uuid.UUID,
+    country: str | None = Query(
+        default=None,
+        min_length=2,
+        max_length=2,
+        description="País de destino (ISO 3166-1 alfa-2). Por defecto, el país de origen.",
+    ),
+    service: ProductService = Depends(get_product_service),
+) -> ShippingEstimateOut:
+    """Estimación de entrega del producto (pública, sin sesión).
+
+    Devuelve una **ventana** de fechas en días hábiles y el coste de envío para el comprador.
+    Hoy el coste es 0 (el envío se define en el checkout, decisión 0012) y las fechas son una
+    estimación configurable: el campo `source` lo declara, para que la interfaz no la presente
+    como una promesa de transportadora.
+    """
+    return await service.shipping_estimate(product_id, country)
 
 
 @router.patch("/catalog/products/{product_id}", response_model=ProductOut)

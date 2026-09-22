@@ -41,8 +41,10 @@ from app.modules.catalog.schemas import (
     UploadUrlOut,
     VariantIn,
     VariantOut,
+    VariantValueOut,
 )
 from app.modules.inventory.service import InventoryService
+from app.modules.shipping.estimates import ShippingEstimateOut, estimate_shipping
 from app.shared.text import slugify
 
 
@@ -285,6 +287,23 @@ class ProductService:
     async def list_images(self, product_id: uuid.UUID) -> list[ProductImage]:
         return await self._images.list_for_product(product_id)
 
+    async def shipping_estimate(
+        self, product_id: uuid.UUID, country: str | None = None
+    ) -> ShippingEstimateOut:
+        """Estimación de entrega del producto (pública).
+
+        No es una tarifa de transportadora: hoy no existe (decisión 0012). Es una estimación
+        configurable y el propio objeto lo declara con `source`, para que la interfaz la muestre
+        como aproximada.
+        """
+        product = await self._products.get_by_id(product_id)
+        if product is None:
+            raise AppError(404, "product_not_found", "Product not found.")
+
+        return estimate_shipping(
+            product_id=product.id, store_id=product.store_id, country=country
+        )
+
     async def delete_image(
         self, product_id: uuid.UUID, store_id: uuid.UUID, image_id: uuid.UUID
     ) -> None:
@@ -327,6 +346,31 @@ class ProductService:
     async def _to_out(self, product: Product) -> ProductOut:
         variants = await self._variants.list_for_product(product.id)
         images = await self._images.list_for_product(product.id)
+        variant_ids = [variant.id for variant in variants]
+        # Stock y atributos de todas las variantes en dos consultas (nada de N+1): lo que necesita
+        # la ficha para mostrar «Talla: M» y las unidades reales de cada presentación.
+        levels = await InventoryService(self._session).availability_for(variant_ids)
+        values = await self._values.list_for_variants(variant_ids)
+
+        attributes: dict[uuid.UUID, list[VariantValueOut]] = {}
+        for variant_id, attribute_id, name, value in values:
+            attributes.setdefault(variant_id, []).append(
+                VariantValueOut(attribute_id=attribute_id, name=name, value=value)
+            )
+
+        variant_out = [
+            VariantOut(
+                id=variant.id,
+                sku=variant.sku,
+                price=variant.price,
+                compare_at_price=variant.compare_at_price,
+                stock=levels[variant.id].quantity,
+                available=levels[variant.id].available,
+                attribute_values=attributes.get(variant.id, []),
+            )
+            for variant in variants
+        ]
+
         return ProductOut(
             id=product.id,
             store_id=product.store_id,
@@ -337,7 +381,8 @@ class ProductService:
             brand=product.brand,
             status=product.status,
             created_at=product.created_at,
-            variants=[VariantOut.model_validate(v) for v in variants],
+            total_available=sum(item.available for item in variant_out),
+            variants=variant_out,
             images=[ProductImageOut.model_validate(img) for img in images],
         )
 

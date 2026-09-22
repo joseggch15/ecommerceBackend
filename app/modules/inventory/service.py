@@ -1,6 +1,8 @@
 """Lógica de negocio del módulo de inventario."""
 
 import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,12 +11,38 @@ from app.modules.inventory.models import InventoryItem, InventoryMovement
 from app.modules.inventory.repository import InventoryRepository
 
 
+@dataclass(frozen=True)
+class StockLevel:
+    """Stock de una variante: total (`quantity`) y disponible para vender (`available`)."""
+
+    quantity: int
+    available: int
+
+
 class InventoryService:
     """Gestión de stock y reservas (cero sobreventa)."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._items = InventoryRepository(session)
+
+    async def availability_for(
+        self, variant_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, StockLevel]:
+        """Stock de varias variantes en una consulta (para listados y fichas de producto).
+
+        Las variantes sin fila de inventario se devuelven con 0 unidades: es más claro para quien
+        pinta la interfaz que tener que inventarse el valor ausente.
+        """
+        levels = await self._items.list_levels(variant_ids)
+
+        return {
+            variant_id: StockLevel(
+                quantity=levels.get(variant_id, (0, 0))[0],
+                available=levels.get(variant_id, (0, 0))[1],
+            )
+            for variant_id in variant_ids
+        }
 
     async def ensure_item(self, variant_id: uuid.UUID, initial_quantity: int = 0) -> InventoryItem:
         """Crea el item de stock de una variante si no existe (al crear la variante)."""

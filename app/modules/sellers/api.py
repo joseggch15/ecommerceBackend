@@ -9,7 +9,7 @@ from app.core.database import get_session
 from app.modules.identity.deps import get_current_user, require_roles
 from app.modules.identity.models import User, UserRole
 from app.modules.sellers.models import Store, StoreStatus
-from app.modules.sellers.schemas import StoreCreate, StoreOut, StoreUpdate
+from app.modules.sellers.schemas import PublicStoreOut, StoreCreate, StoreOut, StoreUpdate
 from app.modules.sellers.service import SellerService
 
 router = APIRouter(tags=["sellers"])
@@ -44,6 +44,23 @@ async def update_my_store(
     service: SellerService = Depends(get_seller_service),
 ) -> Store:
     return await service.update_store(user.id, data)
+
+
+# ---------- Público ----------
+
+
+@router.get("/stores/{store_id}", response_model=PublicStoreOut)
+async def get_public_store(
+    store_id: uuid.UUID,
+    service: SellerService = Depends(get_seller_service),
+) -> PublicStoreOut:
+    """Datos públicos de una tienda aprobada (sin sesión).
+
+    Es lo que necesita la ficha de producto para mostrar «vendido por», su logo y su reputación
+    sin exponer datos internos del vendedor (`user_id`, estado de la solicitud). Una tienda no
+    aprobada responde 404.
+    """
+    return await service.get_public_store(store_id)
 
 
 # ---------- Admin ----------
