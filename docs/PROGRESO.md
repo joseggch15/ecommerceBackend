@@ -203,11 +203,43 @@
 
 ## Hoja de ruta completada
 
-Las **14 fases (0 a 13)** del plan están implementadas y commiteadas. Siguientes pasos sugeridos, por orden de valor: caché y rendimiento medido (EXPLAIN + Redis), pruebas de carga, integración real de pasarela y transportadora, panel de administración sobre los endpoints de la Fase 12, y despliegue gestionado en la nube.
-- [ ] Fase 8: Envíos.
-- [ ] Fase 9: Reseñas, preguntas y reputación.
-- [ ] Fase 10: Promociones y cupones.
-- [ ] Fase 11: Notificaciones y tareas en segundo plano.
-- [ ] Fase 12: Administración y moderación.
-- [ ] Fase 13: Endurecimiento.
+Las **14 fases (0 a 13)** del plan están implementadas y commiteadas.
+
+## Tarea de pendientes del frontend (22/09/2026) — 1ª parte COMPLETADA
+
+Encargo: resolver los bloqueantes de la F6 del frontend (`E:\ecommerce-web\docs/PENDIENTES-BACKEND.md`),
+empezando por pagos, datos públicos de tienda y envío, y stock y atributos de las variantes.
+
+- [x] **Reglas operativas heredadas del frontend** en `.clinerules`: terminal, `esperar.ps1`, credenciales,
+      eficiencia (umbral de 250k tokens, pruebas solo de lo cambiado, sin preguntas de flujo, resumen de 25
+      líneas, `git push` tras cada cierre) y **vista previa en el puerto 3001**.
+- [x] **Vista previa** levantada y dejada encendida: backend en `127.0.0.1:8000` y `pnpm dev -p 3001` en el
+      frontend (`http://localhost:3001/es`).
+- [x] **`VariantOut` con `stock`, `available` y `attribute_values[]`** y `ProductOut.total_available`, en dos
+      consultas por producto (no N+1). `available` descuenta lo reservado. Apartado 10 — **resuelto**.
+- [x] **`GET /api/v1/stores/{store_id}` público** (nombre, logo, reputación y pedidos entregados; solo tiendas
+      aprobadas) y **`GET /api/v1/catalog/products/{id}/shipping`** con ventana de entrega estimada y coste.
+      Apartado 11 — **resuelto**.
+- [x] **`new_object_key()` con el punto y prefijo parametrizable** (`products/<32 hex>.png`, `stores/…`).
+      Apartado 8 — **resuelto**.
+- [x] **Adaptador de Mercado Pago** (`app/modules/payments/mercadopago.py`): preferencia con clave de
+      idempotencia derivada de la orden y del intento, webhook que verifica la firma y **consulta el pago** en el
+      proveedor para confirmar estado, monto y moneda antes de dar la orden por pagada. Apartado 2 — **resuelto en
+      el backend** (Stripe queda como adaptador secundario). Decisión `0019`.
+- [x] `httpx` pasa a dependencia principal; `.env.example` con las variables de Mercado Pago vacías.
+- [x] Pruebas: 31 del catálogo/inventario/vendedores/envíos y 16 de pagos, todas en verde; Ruff limpio.
+- [x] **Decisión pendiente de confirmar por el dueño:** los tres detalles del protocolo de Mercado Pago
+      (encabezado y plantilla de firma, decimales del COP) quedaron **en configuración** porque la documentación
+      oficial no fue accesible desde el entorno de desarrollo.
+
+### Lo que queda de la lista (para la siguiente tarea)
+
+- **Correos reales** (apartado 5): SMTP configurable desde `.env`, plantillas en español e inglés según
+  `preferred_language` y **Mailpit** en `docker-compose.yml` (SMTP 1025, web 8025).
+- **Mejoras de tienda:** conteos por faceta (3), catálogo público de códigos de error (4), reputación y tienda en
+  los resultados de búsqueda (7), producto por slug (9), paginación de preguntas (12), listado para el sitemap
+  (13) y avisos de precio/stock en el carrito (14).
+- **El resto:** exigir correo verificado para comprar (6, decisión del dueño), tokens en el registro (15),
+  **adaptador de Stripe** (secundario, solo si el resto está terminado) y la **suite completa** de pruebas
+  (`uv run pytest -q`) más **mypy**.
 
