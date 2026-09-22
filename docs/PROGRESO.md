@@ -85,9 +85,22 @@
 
 > La conversión es **informativa**: los precios se guardan y se cobran en la moneda del vendedor (por defecto COP).
 
+## Fase 5: Carrito — COMPLETADA
+
+- [x] Carrito **persistente** para usuarios registrados (`carts` + `cart_items`, `UNIQUE(cart_id, variant_id)`).
+- [x] Carrito **temporal** para invitados en **Redis** (`guest_cart:{token}`, TTL 7 días).
+- [x] Identificación del invitado con el header `X-Cart-Token` (se genera y se devuelve si falta).
+- [x] **Fusión** del carrito de invitado al iniciar sesión (`POST /cart/merge`).
+- [x] **Multi-vendedor**: un mismo carrito admite productos de varias tiendas.
+- [x] Endpoints: `GET /cart`, `POST /cart/items`, `PATCH|DELETE /cart/items/{variant_id}`, `DELETE /cart`, `POST /cart/merge`.
+- [x] Totales calculados en el servidor con `Decimal` y `MAX_QUANTITY = 100` por variante.
+- [x] Migración `f015186b39ef` aplicada.
+- [x] 51 pruebas en verde (5 nuevas de carrito).
+
+> El carrito **no reserva stock** (eso ocurre al crear la orden, Fase 6).
+
 ## Próximos pasos
 
-- [ ] Fase 5: Carrito (persistente + invitados, fusión al iniciar sesión, multi-vendedor).
 - [ ] Fase 6: Órdenes y checkout.
 - [ ] Fase 7: Pagos en sandbox y webhooks.
 - [ ] Fase 8: Envíos.

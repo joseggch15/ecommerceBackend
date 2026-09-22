@@ -9,6 +9,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Importa los modelos de negocio para que Alembic los detecte (autogenerate).
+import app.modules.cart.models
 import app.modules.catalog.models
 import app.modules.identity.models
 import app.modules.inventory.models

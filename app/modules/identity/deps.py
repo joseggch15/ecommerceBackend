@@ -59,6 +59,38 @@ async def get_current_user(
     return user
 
 
+async def get_optional_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    """Resuelve el usuario autenticado si hay token válido; si no, devuelve None.
+
+    Se usa en endpoints públicos que se comportan distinto con sesión
+    (por ejemplo, el carrito de invitado).
+    """
+    if credentials is None:
+        return None
+
+    try:
+        payload = decode_access_token(credentials.credentials)
+    except jwt.PyJWTError:
+        return None
+
+    if payload.get("type") != "access":
+        return None
+
+    user_id_raw = payload.get("sub")
+    if not user_id_raw:
+        return None
+
+    try:
+        user_id = uuid.UUID(user_id_raw)
+    except (TypeError, ValueError):
+        return None
+
+    return await UserRepository(session).get_by_id(user_id)
+
+
 def require_roles(*roles: UserRole) -> Callable[..., Awaitable[User]]:
     """Devuelve una dependencia que exige uno de los roles indicados."""
 
