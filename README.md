@@ -1,6 +1,8 @@
-# marketplace-api
+# ecommerceBackend
 
-Backend (API REST) de un **marketplace multi-vendedor**: vendedores publican productos, compradores los compran y la plataforma cobra una comisión por venta. El frontend (Next.js) se desarrolla por separado; este proyecto solo expone la API.
+API REST de un **marketplace multi-vendedor** (proyecto `marketplace-api`): los vendedores publican productos, los compradores los compran y la plataforma cobra una comisión por cada venta. El frontend (Next.js) se desarrolla por separado; este proyecto solo expone la API.
+
+> Repositorio: [joseggch15/ecommerceBackend](https://github.com/joseggch15/ecommerceBackend) · Licencia: **MIT** · 14 módulos · 32 tablas · 89 pruebas · PostgreSQL + Redis + MinIO
 
 ## Tecnologías
 
