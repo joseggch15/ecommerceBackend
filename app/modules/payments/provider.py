@@ -1,7 +1,11 @@
 """Proveedores de pago (interfaz + implementación sandbox).
 
-Cambiar de pasarela (Stripe, MercadoPago, Wompi...) consiste en implementar
-`PaymentProvider` y registrarla en `PROVIDERS`: el dominio no cambia.
+Cambiar de pasarela (Mercado Pago, Stripe, Wompi...) consiste en implementar `PaymentProvider`
+y registrarla en `PROVIDERS`: el dominio no cambia.
+
+La interfaz es **asíncrona** porque una pasarela real hace llamadas HTTP y, además, el webhook
+hay que **confirmarlo contra la API del proveedor** (estado y monto) antes de dar una orden por
+pagada: nunca se confía en lo que llega en el aviso.
 """
 
 import hashlib
@@ -9,6 +13,7 @@ import hmac
 import json
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -29,13 +34,21 @@ class PaymentIntent:
 
 @dataclass(frozen=True)
 class WebhookEvent:
-    """Evento normalizado recibido del proveedor."""
+    """Evento normalizado recibido del proveedor.
+
+    `amount`, `currency` y `order_id` los rellena el proveedor **después de consultar el pago**
+    en su API (no vienen del aviso): son los que permiten confirmar que lo cobrado es lo que
+    había que cobrar.
+    """
 
     event_id: str
     event_type: str
     provider_reference: str
     status: str
     failure_reason: str | None = None
+    amount: Decimal | None = None
+    currency: str | None = None
+    order_id: uuid.UUID | None = None
 
 
 class PaymentProvider(ABC):
@@ -44,18 +57,29 @@ class PaymentProvider(ABC):
     name: str
 
     @abstractmethod
-    def create_intent(
-        self, *, order_id: uuid.UUID, amount: Decimal, currency: str, description: str
+    async def create_intent(
+        self,
+        *,
+        order_id: uuid.UUID,
+        amount: Decimal,
+        currency: str,
+        description: str,
+        idempotency_key: str | None = None,
+        notification_url: str | None = None,
     ) -> PaymentIntent:
-        """Crea el intento de pago y devuelve dónde pagar."""
+        """Crea el intento de pago y devuelve dónde pagar.
+
+        `idempotency_key` permite reintentar sin crear dos cobros; `notification_url` es la URL a la
+        que el proveedor avisará del resultado (webhook).
+        """
 
     @abstractmethod
-    def parse_webhook(self, raw_body: bytes, signature: str | None) -> WebhookEvent:
-        """Verifica la firma y normaliza el webhook."""
+    async def parse_webhook(self, raw_body: bytes, headers: Mapping[str, str]) -> WebhookEvent:
+        """Verifica la firma, confirma el pago contra la API del proveedor y normaliza el evento."""
 
 
 def sign_payload(raw_body: bytes, secret: str | None = None) -> str:
-    """Firma HMAC-SHA256 del cuerpo crudo (la usan el proveedor y el simulador)."""
+    """Firma HMAC-SHA256 del cuerpo crudo (la usan el proveedor sandbox y el simulador)."""
     key = (secret or settings.PAYMENT_WEBHOOK_SECRET).encode()
     return hmac.new(key, raw_body, hashlib.sha256).hexdigest()
 
@@ -68,13 +92,31 @@ def verify_signature(raw_body: bytes, signature: str | None) -> None:
         raise AppError(401, "invalid_signature", "Invalid webhook signature.")
 
 
+def header_value(headers: Mapping[str, str], name: str) -> str | None:
+    """Busca un encabezado sin depender de mayúsculas y minúsculas (un dict de pruebas no lo es)."""
+    wanted = name.lower()
+
+    for key, value in headers.items():
+        if key.lower() == wanted:
+            return value
+
+    return None
+
+
 class SandboxPaymentProvider(PaymentProvider):
     """Pasarela simulada para desarrollo (no cobra de verdad)."""
 
     name = "sandbox"
 
-    def create_intent(
-        self, *, order_id: uuid.UUID, amount: Decimal, currency: str, description: str
+    async def create_intent(
+        self,
+        *,
+        order_id: uuid.UUID,
+        amount: Decimal,
+        currency: str,
+        description: str,
+        idempotency_key: str | None = None,
+        notification_url: str | None = None,
     ) -> PaymentIntent:
         reference = f"sbx_{uuid.uuid4().hex}"
         return PaymentIntent(
@@ -85,8 +127,8 @@ class SandboxPaymentProvider(PaymentProvider):
             currency=currency,
         )
 
-    def parse_webhook(self, raw_body: bytes, signature: str | None) -> WebhookEvent:
-        verify_signature(raw_body, signature)
+    async def parse_webhook(self, raw_body: bytes, headers: Mapping[str, str]) -> WebhookEvent:
+        verify_signature(raw_body, header_value(headers, "x-signature"))
         try:
             payload = json.loads(raw_body)
         except json.JSONDecodeError:
@@ -126,6 +168,11 @@ class SandboxPaymentProvider(PaymentProvider):
 
 
 PROVIDERS: dict[str, PaymentProvider] = {SandboxPaymentProvider.name: SandboxPaymentProvider()}
+
+
+def register_provider(provider: PaymentProvider) -> None:
+    """Registra una pasarela (lo usa el adaptador de Mercado Pago al importarse)."""
+    PROVIDERS[provider.name] = provider
 
 
 def get_provider(name: str) -> PaymentProvider:

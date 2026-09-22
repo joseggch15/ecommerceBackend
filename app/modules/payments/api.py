@@ -78,11 +78,15 @@ async def simulate_payment(
 async def payment_webhook(
     provider: str,
     request: Request,
-    x_signature: str | None = Header(default=None, alias="X-Signature"),
     service: PaymentService = Depends(get_payment_service),
 ) -> WebhookAckOut:
-    """Webhook del proveedor: firma HMAC-SHA256 en `X-Signature` e idempotente por evento."""
+    """Webhook del proveedor.
+
+    Los encabezados se pasan completos al adaptador, que conoce su propio protocolo de firma (el
+    sandbox usa `X-Signature` con HMAC-SHA256 del cuerpo; Mercado Pago usa `x-signature` +
+    `x-request-id`). El cuerpo **crudo** es lo que se firma, así que se lee tal cual llega.
+    """
     raw_body = await request.body()
     return await service.handle_webhook(
-        provider_name=provider, raw_body=raw_body, signature=x_signature
+        provider_name=provider, raw_body=raw_body, headers=request.headers
     )

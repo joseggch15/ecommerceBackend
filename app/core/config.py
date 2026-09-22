@@ -66,10 +66,28 @@ class Settings(BaseSettings):
     EXCHANGE_RATE_API_KEY: str = ""
     EXCHANGE_RATE_CACHE_TTL_SECONDS: int = 3600
 
-    # Pagos (proveedor en sandbox + webhooks firmados con HMAC-SHA256)
+    # Pagos (proveedor sandbox por defecto; Mercado Pago es la principal, ver decisión 0019)
     PAYMENT_PROVIDER: str = "sandbox"
     PAYMENT_WEBHOOK_SECRET: str = "dev-webhook-secret"
     PAYMENT_CHECKOUT_BASE_URL: str = "https://sandbox.marketplace.local/checkout"
+
+    # URL pública de esta API: con ella se construye la `notification_url` que el proveedor llama.
+    API_PUBLIC_URL: str = "http://localhost:8000"
+
+    # Mercado Pago (Checkout Bricks / Checkout Pro por su API REST).
+    # El detalle del protocolo vive en configuración a propósito: cambió entre versiones y
+    # **debe confirmarse con su documentación oficial** antes de cobrar de verdad (decisión 0019).
+    MERCADOPAGO_ACCESS_TOKEN: str = ""
+    MERCADOPAGO_PUBLIC_KEY: str = ""
+    MERCADOPAGO_WEBHOOK_SECRET: str = ""
+    MERCADOPAGO_API_BASE_URL: str = "https://api.mercadopago.com"
+    MERCADOPAGO_SIGNATURE_HEADER: str = "x-signature"
+    MERCADOPAGO_REQUEST_ID_HEADER: str = "x-request-id"
+    MERCADOPAGO_IDEMPOTENCY_HEADER: str = "X-Idempotency-Key"
+    MERCADOPAGO_SIGNATURE_TEMPLATE: str = "id:{data_id};request-id:{request_id};ts:{ts};"
+    # "integer" (por defecto): monto sin decimales, como se usa el peso colombiano en la práctica.
+    # "decimal": monto con dos decimales.
+    MERCADOPAGO_AMOUNT_MODE: str = "integer"
 
     # Envíos: estimación configurable (ver `app/modules/shipping/estimates.py`). Hoy no hay
     # tarifas por zona ni transportadora integrada: la fecha estimada sale de estos valores y

@@ -8,6 +8,7 @@ efecto. La firma HMAC-SHA256 se verifica antes de tocar nada.
 
 import json
 import uuid
+from collections.abc import Mapping
 from datetime import UTC, datetime
 
 from redis.asyncio import Redis
@@ -22,6 +23,9 @@ from app.modules.notifications.service import NotificationService
 from app.modules.orders.models import Order, OrderStatus
 from app.modules.orders.models import PaymentStatus as OrderPaymentStatus
 from app.modules.orders.repository import OrderRepository
+
+# Se importa para que el adaptador de Mercado Pago se registre al arrancar la aplicación.
+from app.modules.payments import mercadopago as _mercadopago
 from app.modules.payments.models import Payment, PaymentEvent, PaymentStatus
 from app.modules.payments.provider import (
     SandboxPaymentProvider,
@@ -31,6 +35,11 @@ from app.modules.payments.provider import (
 )
 from app.modules.payments.repository import PaymentRepository
 from app.modules.payments.schemas import PaymentOut, WebhookAckOut
+
+# Pasarelas que trae el proyecto (cada adaptador se registra al importarse).
+AVAILABLE_PAYMENT_PROVIDERS = frozenset(
+    {SandboxPaymentProvider.name, _mercadopago.mercadopago_provider.name}
+)
 
 # Resultado informado por el proveedor -> estado del intento de pago.
 STATUS_BY_OUTCOME: dict[str, PaymentStatus] = {
@@ -62,17 +71,41 @@ class PaymentService:
         if order.status != OrderStatus.PENDING:
             raise AppError(409, "order_not_payable", "Order cannot be paid in its current state.")
 
-        if idempotency_key:
+        # Un intento en curso (doble clic, red que se cae) se devuelve tal cual: nunca dos cobros.
+        # Un intento fallido no bloquea: el comprador puede volver a intentarlo con otro pago.
+        in_progress = next(
+            (
+                candidate
+                for candidate in await self._payments.list_by_order(order.id)
+                if candidate.status in {PaymentStatus.PENDING, PaymentStatus.PROCESSING}
+            ),
+            None,
+        )
+        if idempotency_key is None and in_progress is not None:
+            return _payment_out(in_progress)
+
+        if idempotency_key is not None:
             existing = await self._payments.get_by_idempotency_key(order.id, idempotency_key)
             if existing is not None:
                 return _payment_out(existing)
 
+        # La clave que se manda al proveedor se deriva de la orden y del intento: reintentar no
+        # reutiliza la del intento fallido y el mismo intento no crea dos cobros.
+        key = idempotency_key or f"order-{order.id}-{await self._next_attempt(order.id)}"
+
         provider = get_provider(settings.PAYMENT_PROVIDER)
-        intent = provider.create_intent(
+        # El proveedor avisará a esta URL cuando el pago cambie de estado (webhook firmado).
+        notification_url = (
+            f"{settings.API_PUBLIC_URL.rstrip('/')}{settings.API_V1_PREFIX}"
+            f"/webhooks/payments/{provider.name}"
+        )
+        intent = await provider.create_intent(
             order_id=order.id,
             amount=order.total,
             currency=order.currency,
             description=f"Order {order.order_number}",
+            idempotency_key=key,
+            notification_url=notification_url,
         )
 
         payment = await self._payments.add(
@@ -84,7 +117,7 @@ class PaymentService:
                 amount=intent.amount,
                 currency=intent.currency,
                 checkout_url=intent.checkout_url,
-                idempotency_key=idempotency_key,
+                idempotency_key=key,
             )
         )
         await self._session.commit()
@@ -99,16 +132,17 @@ class PaymentService:
         return [_payment_out(payment) for payment in payments]
 
     async def handle_webhook(
-        self, *, provider_name: str, raw_body: bytes, signature: str | None
+        self, *, provider_name: str, raw_body: bytes, headers: Mapping[str, str]
     ) -> WebhookAckOut:
         """Verifica, guarda y aplica un webhook (idempotente por evento)."""
         provider = get_provider(provider_name)
-        event = provider.parse_webhook(raw_body, signature)
+        event = await provider.parse_webhook(raw_body, headers)
 
         if await self._payments.get_event(provider_name, event.event_id) is not None:
             return WebhookAckOut(received=True, duplicate=True)
 
-        payment = await self._payments.get_by_reference(event.provider_reference)
+        payment = await self._payment_for_event(event)
+
         event_row = await self._payments.add_event(
             PaymentEvent(
                 payment_id=payment.id if payment is not None else None,
@@ -142,7 +176,7 @@ class PaymentService:
         await self.handle_webhook(
             provider_name=payment.provider,
             raw_body=raw_body,
-            signature=sign_payload(raw_body),
+            headers={"x-signature": sign_payload(raw_body)},
         )
 
         refreshed = await self._payments.get_by_id(payment_id)
@@ -151,6 +185,24 @@ class PaymentService:
         return _payment_out(refreshed)
 
     # ---------- Internos ----------
+
+    async def _next_attempt(self, order_id: uuid.UUID) -> int:
+        """Número del siguiente intento de pago de la orden (los anteriores ya están guardados)."""
+        return len(await self._payments.list_by_order(order_id)) + 1
+
+    async def _payment_for_event(self, event: WebhookEvent) -> Payment | None:
+        """Localiza el intento de pago al que se refiere el evento.
+
+        Mercado Pago avisa con el id del **pago**, que no existe cuando creamos la preferencia: la
+        referencia fiable es el id de la orden (`external_reference`). Se busca el intento que
+        sigue pendiente y, si el proveedor no lo trae, se cae a la referencia guardada (sandbox).
+        """
+        if event.order_id is not None:
+            for candidate in await self._payments.list_by_order(event.order_id):
+                if candidate.status in {PaymentStatus.PENDING, PaymentStatus.PROCESSING}:
+                    return candidate
+
+        return await self._payments.get_by_reference(event.provider_reference)
 
     async def _apply(self, payment: Payment, event: WebhookEvent) -> None:
         """Aplica el desenlace del proveedor al pago y a la orden."""
@@ -165,6 +217,13 @@ class PaymentService:
         order = await self._orders.get_by_id(payment.order_id)
 
         if new_status == PaymentStatus.SUCCEEDED:
+            if not _amount_matches(event, payment):
+                # Una orden no se da por pagada sin comprobar el monto y la moneda que confirma el
+                # proveedor: un aviso manipulado no puede marcar una orden como pagada.
+                payment.status = PaymentStatus.FAILED
+                payment.failure_reason = "amount_mismatch"
+                return
+
             payment.paid_at = datetime.now(UTC)
             payment.failure_reason = None
             if order is not None:
@@ -203,6 +262,21 @@ class PaymentService:
         if order is None or order.user_id != user_id:
             raise AppError(404, "payment_not_found", "Payment not found.")
         return payment
+
+
+def _amount_matches(event: WebhookEvent, payment: Payment) -> bool:
+    """¿El monto y la moneda que confirma el proveedor coinciden con el intento de pago?
+
+    Si el proveedor no informa el monto (sandbox) no hay nada que comparar y se acepta; cuando lo
+    informa, tiene que coincidir **exactamente** (y la moneda también, si viene).
+    """
+    if event.amount is None:
+        return True
+
+    if event.amount != payment.amount:
+        return False
+
+    return event.currency is None or event.currency.upper() == payment.currency.upper()
 
 
 def _payment_out(payment: Payment) -> PaymentOut:
