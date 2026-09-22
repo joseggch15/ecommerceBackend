@@ -46,8 +46,13 @@ class InventoryService:
         await self._session.commit()
         return item
 
-    async def reserve(self, variant_id: uuid.UUID, quantity: int) -> InventoryItem:
-        """Reserva stock de forma atómica (SELECT ... FOR UPDATE)."""
+    async def reserve(
+        self, variant_id: uuid.UUID, quantity: int, *, commit: bool = True
+    ) -> InventoryItem:
+        """Reserva stock de forma atómica (SELECT ... FOR UPDATE).
+
+        Con `commit=False` se puede participar en una transacción mayor (checkout).
+        """
         item = await self._items.get_by_variant(variant_id, for_update=True)
         if item is None:
             raise AppError(404, "inventory_not_found", "Inventory item not found.")
@@ -57,11 +62,19 @@ class InventoryService:
 
         item.reserved_quantity += quantity
         await self._record_movement(variant_id, -quantity, "reservation")
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
+        else:
+            await self._session.flush()
         return item
 
-    async def release(self, variant_id: uuid.UUID, quantity: int) -> InventoryItem:
-        """Libera una reserva previamente hecha."""
+    async def release(
+        self, variant_id: uuid.UUID, quantity: int, *, commit: bool = True
+    ) -> InventoryItem:
+        """Libera una reserva previamente hecha.
+
+        Con `commit=False` se puede participar en una transacción mayor (cancelación).
+        """
         item = await self._items.get_by_variant(variant_id, for_update=True)
         if item is None:
             raise AppError(404, "inventory_not_found", "Inventory item not found.")
@@ -71,7 +84,10 @@ class InventoryService:
 
         item.reserved_quantity -= quantity
         await self._record_movement(variant_id, quantity, "release")
-        await self._session.commit()
+        if commit:
+            await self._session.commit()
+        else:
+            await self._session.flush()
         return item
 
     async def _record_movement(self, variant_id: uuid.UUID, delta: int, reason: str) -> None:

@@ -99,9 +99,23 @@
 
 > El carrito **no reserva stock** (eso ocurre al crear la orden, Fase 6).
 
+## Fase 6: Órdenes y checkout — COMPLETADA
+
+- [x] `orders` (compra del comprador, **un solo pago**) + `seller_orders` (sub-orden por vendedor) + `order_items`.
+- [x] `POST /orders` (checkout): una transacción que valida, **reserva stock**, calcula totales y comisión, crea la orden y vacía el carrito.
+- [x] **Idempotencia** con el header `Idempotency-Key` (`UNIQUE(user_id, idempotency_key)`).
+- [x] **Snapshot** por línea: título, etiqueta de variante, SKU, precio unitario, moneda, tasa y monto de comisión.
+- [x] Comisión efectiva = `categories.commission_rate` o la global; `payout_amount` = subtotal − comisión.
+- [x] **Máquina de estados** de la sub-orden: `pending → processing → shipped → delivered` (+ `cancelled`).
+- [x] `POST /orders/{id}/cancel` libera el stock reservado.
+- [x] Endpoints: `POST /orders`, `GET /orders`, `GET /orders/{id}`, `POST /orders/{id}/cancel`, `GET /seller/orders`, `PATCH /seller/orders/{id}/status`.
+- [x] Migración `b6d53d444b30` aplicada (los índices de búsqueda se preservaron).
+- [x] 59 pruebas en verde (8 nuevas de órdenes).
+
+> El pago se asocia a la **orden completa** (Fase 7); los envíos, a cada sub-orden (Fase 8).
+
 ## Próximos pasos
 
-- [ ] Fase 6: Órdenes y checkout.
 - [ ] Fase 7: Pagos en sandbox y webhooks.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
