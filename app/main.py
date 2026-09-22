@@ -13,6 +13,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import get_logger, setup_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.redis import redis_client
+from app.core.storage import ensure_bucket
 
 logger = get_logger(__name__)
 
@@ -21,6 +22,7 @@ logger = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Gestiona el ciclo de vida de la aplicación (arranque y apagado)."""
     logger.info("app_startup", environment=settings.ENVIRONMENT)
+    ensure_bucket()
     yield
     await redis_client.aclose()
     await engine.dispose()

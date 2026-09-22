@@ -1,11 +1,17 @@
 """Tipos base reutilizables entre módulos (mixins de SQLAlchemy)."""
 
+import enum
 import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
+
+
+def enum_values(enum_class: type[enum.Enum]) -> list[str]:
+    """Devuelve los valores (no los nombres) de un enum para persistirlos."""
+    return [member.value for member in enum_class]
 
 
 class UUIDPrimaryKeyMixin:

@@ -143,3 +143,4 @@ ecommerce-backend/  (raíz del repo: E:\ecommerce)
 
 - PostgreSQL: **5433** en el host (el 5432 lo ocupa un PostgreSQL local de Windows) → 5432 en el contenedor.
 - Redis: **6379**.
+- MinIO (S3-compatible): API en **9000** y consola web en **9001** (http://localhost:9001).

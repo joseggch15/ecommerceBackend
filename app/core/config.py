@@ -1,5 +1,6 @@
 """Configuración de la aplicación, cargada desde variables de entorno / .env."""
 
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic import Field
@@ -46,6 +47,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_LOGIN_MAX: int = 5
     RATE_LIMIT_REGISTER_MAX: int = 3
     RATE_LIMIT_PASSWORD_RESET_MAX: int = 3
+
+    # Comisión de la plataforma (por defecto global; cada categoría puede sobrescribirla)
+    DEFAULT_COMMISSION_RATE: Decimal = Decimal("10.00")
+
+    # Almacenamiento de objetos (MinIO, compatible con S3)
+    S3_ENDPOINT_URL: str = "http://localhost:9000"
+    S3_ACCESS_KEY: str = "minioadmin"
+    S3_SECRET_KEY: str = "minioadmin"
+    S3_BUCKET: str = "marketplace"
+    S3_REGION: str = "us-east-1"
 
 
 @lru_cache

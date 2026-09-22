@@ -9,7 +9,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.shared.base import SoftDeleteMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.shared.base import (
+    SoftDeleteMixin,
+    TimestampMixin,
+    UUIDPrimaryKeyMixin,
+    enum_values,
+)
 
 
 class UserRole(enum.StrEnum):
@@ -26,11 +31,6 @@ class TokenType(enum.StrEnum):
     PASSWORD_RESET = "password_reset"
 
 
-def _enum_values(enum_class: type[enum.Enum]) -> list[str]:
-    """Devuelve los valores (no los nombres) de un enum para persistirlos."""
-    return [member.value for member in enum_class]
-
-
 class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     """Cuenta de usuario: identidad y autenticación."""
 
@@ -39,7 +39,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role", native_enum=False, values_callable=_enum_values),
+        Enum(UserRole, name="user_role", native_enum=False, values_callable=enum_values),
         nullable=False,
         default=UserRole.CUSTOMER,
     )
@@ -138,7 +138,7 @@ class UserToken(UUIDPrimaryKeyMixin, Base):
         nullable=False,
     )
     type: Mapped[TokenType] = mapped_column(
-        Enum(TokenType, name="user_token_type", native_enum=False, values_callable=_enum_values),
+        Enum(TokenType, name="user_token_type", native_enum=False, values_callable=enum_values),
         nullable=False,
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)

@@ -30,9 +30,31 @@
 - [x] Migración `ea689e90a5da` aplicada y verificada.
 - [x] 18 pruebas (unitarias + integración contra PostgreSQL en Docker) en verde.
 
+## Fase 2a: Vendedores y catálogo (sellers + categorías + atributos) — COMPLETADA
+
+- [x] Módulo `sellers`: tienda (`stores`) con estados `pending/approved/rejected/suspended`.
+- [x] Flujo de aprobación: el customer solicita su tienda; **solo el admin la aprueba/rechaza**.
+- [x] Módulo `catalog`: categorías jerárquicas (árbol), atributos por categoría y comisión por categoría.
+- [x] Tablas nuevas: `stores`, `categories`, `attributes`, `category_attributes`.
+- [x] Comisión por categoría (`commission_rate` NUMERIC) + valor global por defecto (`DEFAULT_COMMISSION_RATE`).
+- [x] Script `promote_admin` para ascender al dueño a admin.
+- [x] Migración `f7ebb26b927a` aplicada con CHECK constraints (`store_status`, `attribute_type`).
+- [x] 10 pruebas nuevas de integración (28 en total) en verde.
+
+## Fase 2b: Productos, variantes e imágenes — COMPLETADA
+
+- [x] Modelos `products`, `product_variants`, `product_images`, `variant_values`.
+- [x] Productos con estados `draft/active/paused/closed` y transiciones válidas (publish/pause/close).
+- [x] Variantes con SKU único, precio NUMERIC (12,2), precio de comparación y stock.
+- [x] Valores de atributos por variante (EAV), listos para filtros por facetas (Fase 3).
+- [x] Imágenes con MinIO + boto3 + URLs prefirmadas (`POST /catalog/images/upload-url`).
+- [x] Autorización: solo el vendedor dueño (tienda aprobada) gestiona sus productos.
+- [x] Migración `915dafad01ed` aplicada con CHECK `product_status`.
+- [x] Dinero serializado como string con 2 decimales (Pydantic `Decimal` + `NUMERIC`).
+- [x] 32 pruebas en verde (4 nuevas de productos).
+
 ## Próximos pasos
 
-- [ ] **Fase 2: Vendedores y catálogo** — tiendas, verificación del vendedor (tú como creador), categorías, atributos, productos, variantes e imágenes.
 - [ ] Fase 3: Inventario y búsqueda.
 - [ ] Fase 4: Monedas y conversión (detección por ubicación + API de tasas de cambio).
 - [ ] Fase 5: Carrito.
