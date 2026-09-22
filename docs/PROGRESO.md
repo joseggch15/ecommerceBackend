@@ -53,9 +53,27 @@
 - [x] Dinero serializado como string con 2 decimales (Pydantic `Decimal` + `NUMERIC`).
 - [x] 32 pruebas en verde (4 nuevas de productos).
 
+## Fase 3a: Búsqueda — COMPLETADA
+
+- [x] Módulo `search` con búsqueda por texto tolerante a errores (pg_trgm + full-text de PostgreSQL).
+- [x] Filtros por facetas (categoría, marca, rango de precio), ordenamiento (relevancia/precio/reciente) y paginación por cursor.
+- [x] Autocompletado de títulos (`GET /catalog/search/suggest`).
+- [x] Interfaz `SearchService` abstracta, lista para migrar a Meilisearch/OpenSearch.
+- [x] Migración `26a56be90086` (extensión `pg_trgm` + índices GIN).
+- [x] 35 pruebas en verde (3 nuevas de búsqueda).
+
+## Fase 3b: Inventario — COMPLETADA
+
+- [x] Módulo `inventory` con `inventory_items` (quantity, reserved_quantity) e `inventory_movements` (ledger de auditoría).
+- [x] El stock se movió de `product_variants` a `inventory_items` (inventory es dueño del stock).
+- [x] Reservas atómicas con `SELECT ... FOR UPDATE` (cero sobreventa) y liberación de reservas.
+- [x] Ajustes de stock con validación (nunca por debajo de lo reservado).
+- [x] Al crear una variante, su stock inicial se registra en inventario automáticamente.
+- [x] Migración `5972bb1db1b2` aplicada (los índices de búsqueda se preservaron).
+- [x] 39 pruebas en verde (4 nuevas de inventario).
+
 ## Próximos pasos
 
-- [ ] Fase 3: Inventario y búsqueda.
 - [ ] Fase 4: Monedas y conversión (detección por ubicación + API de tasas de cambio).
 - [ ] Fase 5: Carrito.
 - [ ] Fase 6: Órdenes y checkout.

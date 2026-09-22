@@ -42,6 +42,7 @@ from app.modules.catalog.schemas import (
     VariantIn,
     VariantOut,
 )
+from app.modules.inventory.service import InventoryService
 from app.shared.text import slugify
 
 
@@ -303,9 +304,9 @@ class ProductService:
             sku=data.sku,
             price=data.price,
             compare_at_price=data.compare_at_price,
-            stock=data.stock,
         )
         await self._variants.add(variant)
+        await InventoryService(self._session).ensure_item(variant.id, data.stock)
         for value_data in data.attribute_values:
             await self._values.add(
                 VariantValue(

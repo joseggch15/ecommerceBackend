@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 # Importa los modelos de negocio para que Alembic los detecte (autogenerate).
 import app.modules.catalog.models
 import app.modules.identity.models
+import app.modules.inventory.models
 import app.modules.sellers.models  # noqa: F401
 from app.core.config import settings
 from app.core.database import Base

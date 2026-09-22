@@ -103,7 +103,6 @@ class VariantOut(BaseModel):
     sku: str
     price: Decimal
     compare_at_price: Decimal | None
-    stock: int
 
 
 class ProductImageOut(BaseModel):

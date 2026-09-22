@@ -123,7 +123,6 @@ class ProductVariant(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     sku: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     compare_at_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    stock: Mapped[int] = mapped_column(default=0, nullable=False)
 
 
 class ProductImage(UUIDPrimaryKeyMixin, TimestampMixin, Base):

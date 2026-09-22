@@ -7,6 +7,7 @@ import asyncpg  # type: ignore[import-untyped]  # asyncpg no distribuye stubs de
 import pytest
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -64,6 +65,7 @@ async def db_engine() -> AsyncIterator[AsyncEngine]:
     """Motor asíncrono contra la base de datos de pruebas (tablas creadas/limpiadas)."""
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield engine
