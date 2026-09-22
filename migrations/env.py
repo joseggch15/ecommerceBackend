@@ -8,16 +8,36 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# Importa los modelos de negocio para que Alembic los detecte (autogenerate).
 import app.modules.cart.models
 import app.modules.catalog.models
 import app.modules.identity.models
 import app.modules.inventory.models
 import app.modules.orders.models
 import app.modules.payments.models
-import app.modules.sellers.models  # noqa: F401
+import app.modules.sellers.models
+import app.modules.shipping.models
 from app.core.config import settings
 from app.core.database import Base
+
+# Los imports de arriba existen por su efecto secundario: registran las tablas en
+# `Base.metadata`. Si se pierden, `alembic revision --autogenerate` genera una
+# migración que DROPEA todas las tablas. Esta lista los mantiene "usados" y, de
+# paso, comprobamos que el metadata quedó completo antes de migrar nada.
+_MODEL_MODULES = (
+    app.modules.cart.models,
+    app.modules.catalog.models,
+    app.modules.identity.models,
+    app.modules.inventory.models,
+    app.modules.orders.models,
+    app.modules.payments.models,
+    app.modules.sellers.models,
+    app.modules.shipping.models,
+)
+
+_REQUIRED_TABLES = {"users", "stores", "products", "carts", "orders", "payments", "shipments"}
+_missing_tables = _REQUIRED_TABLES - set(Base.metadata.tables)
+if _missing_tables:
+    raise RuntimeError(f"Modelos sin importar en migrations/env.py: {sorted(_missing_tables)}")
 
 config = context.config
 

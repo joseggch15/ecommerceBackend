@@ -126,9 +126,23 @@
 - [x] Migración `b5bdd281b2fc` aplicada (los índices de búsqueda se preservaron).
 - [x] 67 pruebas en verde (8 nuevas de pagos).
 
+## Fase 8: Envíos — COMPLETADA
+
+- [x] `shipments` (un envío por sub-orden: transportadora, guía, URL de seguimiento, costo logístico y fechas) + `shipment_events` (línea de tiempo).
+- [x] **Máquina de estados**: `pending → ready → shipped → in_transit → delivered` (+ `returned`/`cancelled`), con un evento por cada cambio.
+- [x] **Sincronización**: `shipped`/`in_transit` mueven la sub-orden a `shipped`; al entregarse **todas** las sub-órdenes, la orden pasa a `completed`.
+- [x] Endpoints: `POST|PATCH|GET /seller/orders/{id}/shipment`, `POST /seller/orders/{id}/shipment/status`, `GET /orders/{id}/shipments`.
+- [x] El `cost` del envío es el **gasto logístico del vendedor**; la tarifa cobrada al comprador se define en el checkout.
+- [x] Migración `98e2cc4cc799` aplicada (25 tablas y los índices de búsqueda intactos).
+- [x] 72 pruebas en verde (5 nuevas de envíos).
+
+> Pendiente para más adelante: tarifas de envío al comprador por zona/tabla del vendedor.
+
+> ⚠️ **Incidente resuelto:** `ruff check --fix` borró los `import app.modules.*.models` de `migrations/env.py` (los veía como no usados). Sin ellos el metadata queda vacío y el autogenerate genera una migración que **dropea todas las tablas** (se generó y se descartó sin aplicar). Ahora `env.py` referencia los módulos en `_MODEL_MODULES` y **aborta si falta algún modelo** en `Base.metadata`. Revisa siempre el autogenerate antes de aplicar.
+
 ## Próximos pasos
 
-- [ ] Fase 8: Envíos.
+- [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.
