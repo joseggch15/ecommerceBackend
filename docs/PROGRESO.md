@@ -140,9 +140,21 @@
 
 > ⚠️ **Incidente resuelto:** `ruff check --fix` borró los `import app.modules.*.models` de `migrations/env.py` (los veía como no usados). Sin ellos el metadata queda vacío y el autogenerate genera una migración que **dropea todas las tablas** (se generó y se descartó sin aplicar). Ahora `env.py` referencia los módulos en `_MODEL_MODULES` y **aborta si falta algún modelo** en `Base.metadata`. Revisa siempre el autogenerate antes de aplicar.
 
+## Fase 9: Reseñas, preguntas y reputación — COMPLETADA
+
+- [x] `reviews`: una reseña por comprador y producto, **solo si la compró y se la entregaron** (`order_item_id` de la línea de orden entregada).
+- [x] **Reputación** denormalizada en `products` y `stores` (`rating_average`, `rating_count`), recalculada al crear, editar o borrar.
+- [x] `questions` + `answers`: preguntas públicas y respuesta del vendedor (solo el dueño de la tienda del producto).
+- [x] Endpoints: `POST /reviews`, `GET /products/{id}/reviews`, `PATCH|DELETE /reviews/{id}`, `POST|GET /products/{id}/questions`, `POST /questions/{id}/answers`.
+- [x] `is_published` deja la moderación lista para la Fase 12; el listado de reseñas va por cursor.
+- [x] Migración `164ce801f620` aplicada (28 tablas, índices GIN intactos).
+- [x] 75 pruebas en verde (3 nuevas de reseñas).
+
+> 🐞 **Bug resuelto:** usar `update()` masivo de SQLAlchemy para los agregados **expiraba** instancias de la sesión y al leerlas después fallaba con `MissingGreenlet` (I/O fuera del greenlet). Ahora se escriben sobre el objeto ORM (`select` + asignación) y, por seguridad, se hace `refresh` antes de responder.
+
 ## Próximos pasos
 
-- [ ] Fase 9: Reseñas, preguntas y reputación.
+- [ ] Fase 10: Promociones y cupones.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.

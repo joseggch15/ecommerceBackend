@@ -2,8 +2,9 @@
 
 import enum
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -41,3 +42,6 @@ class Store(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
         nullable=False,
         default=StoreStatus.PENDING,
     )
+    # Reputación (agregados denormalizados que mantiene el módulo de reseñas).
+    rating_average: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)
+    rating_count: Mapped[int] = mapped_column(default=0, nullable=False)

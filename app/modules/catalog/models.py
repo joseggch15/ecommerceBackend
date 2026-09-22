@@ -102,6 +102,9 @@ class Product(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin, Base):
     slug: Mapped[str] = mapped_column(String(220), unique=True, index=True, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     brand: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Reputación (agregados denormalizados que mantiene el módulo de reseñas).
+    rating_average: Mapped[Decimal | None] = mapped_column(Numeric(3, 2), nullable=True)
+    rating_count: Mapped[int] = mapped_column(default=0, nullable=False)
     status: Mapped[ProductStatus] = mapped_column(
         Enum(ProductStatus, name="product_status", native_enum=False, values_callable=enum_values),
         nullable=False,
