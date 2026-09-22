@@ -72,10 +72,22 @@
 - [x] Migración `5972bb1db1b2` aplicada (los índices de búsqueda se preservaron).
 - [x] 39 pruebas en verde (4 nuevas de inventario).
 
+## Fase 4: Monedas y conversión — COMPLETADA
+
+- [x] Lista de monedas **ISO 4217** (código, nombre, símbolo) — ~160 monedas.
+- [x] **Proveedor de tasas de cambio** abstracto (`ExchangeRateProvider`) con implementación HTTP configurable por `.env`.
+- [x] **Caché de tasas en Redis** (TTL configurable) para no llamar a la API en cada petición.
+- [x] **Conversión con `Decimal`** (nunca float), redondeo a 2 decimales.
+- [x] **Localización** por headers (`X-Country`, `Accept-Language`) → país, moneda, idioma y zona horaria.
+- [x] Endpoints: `GET /currencies`, `GET /currencies/rates`, `POST /currencies/convert`, `GET /currencies/locale`.
+- [x] Sin tablas nuevas (la preferencia del usuario ya vive en `user_profiles`, Fase 1).
+- [x] 46 pruebas en verde (7 nuevas de monedas).
+
+> La conversión es **informativa**: los precios se guardan y se cobran en la moneda del vendedor (por defecto COP).
+
 ## Próximos pasos
 
-- [ ] Fase 4: Monedas y conversión (detección por ubicación + API de tasas de cambio).
-- [ ] Fase 5: Carrito.
+- [ ] Fase 5: Carrito (persistente + invitados, fusión al iniciar sesión, multi-vendedor).
 - [ ] Fase 6: Órdenes y checkout.
 - [ ] Fase 7: Pagos en sandbox y webhooks.
 - [ ] Fase 8: Envíos.

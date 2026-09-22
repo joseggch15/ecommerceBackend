@@ -58,6 +58,14 @@ class Settings(BaseSettings):
     S3_BUCKET: str = "marketplace"
     S3_REGION: str = "us-east-1"
 
+    # Monedas y localización
+    DEFAULT_CURRENCY: str = "COP"
+    DEFAULT_LANGUAGE: str = "es"
+    DEFAULT_TIMEZONE: str = "America/Bogota"
+    EXCHANGE_RATE_API_URL: str = "https://open.er-api.com/v6/latest"
+    EXCHANGE_RATE_API_KEY: str = ""
+    EXCHANGE_RATE_CACHE_TTL_SECONDS: int = 3600
+
 
 @lru_cache
 def get_settings() -> Settings:
