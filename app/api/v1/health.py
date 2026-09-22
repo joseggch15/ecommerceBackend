@@ -37,6 +37,13 @@ async def check_redis(redis_client: Redis = Depends(get_redis)) -> dict[str, str
     return {"status": "ok"}
 
 
+@router.get("/live", summary="Liveness probe", response_model=HealthResponse)
+async def liveness() -> HealthResponse:
+    """Liveness: el proceso está vivo (no toca dependencias)."""
+    return HealthResponse(status="ok", checks={})
+
+
+@router.get("/ready", summary="Readiness probe", response_model=HealthResponse)
 @router.get("", summary="Health check", response_model=HealthResponse)
 async def health(
     response: Response,

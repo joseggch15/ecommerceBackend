@@ -190,9 +190,20 @@
 
 > Los cambios de estado respetan las máquinas de estados ya existentes (catálogo y tiendas) y quedan auditados; el `reason` es opcional pero recomendado desde el panel.
 
-## Próximos pasos
+## Fase 13: Endurecimiento (seguridad y despliegue) — COMPLETADA
 
-- [ ] Fase 13: Endurecimiento (caché, rendimiento, pruebas de carga, seguridad, despliegue).
+- [x] **Cabeceras de seguridad** en toda respuesta: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`, `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'` y `Cross-Origin-Resource-Policy`; **HSTS solo en producción**.
+- [x] **`TrustedHostMiddleware`** con `ALLOWED_HOSTS` configurable (por defecto `*` en desarrollo).
+- [x] **Sondas separadas**: `GET /health/live` (sin dependencias) y `GET /health/ready` (PostgreSQL + Redis, 503 si algo falla); `/health` sigue siendo alias de readiness.
+- [x] **Imagen de producción**: `Dockerfile` multi-stage (uv, sin dev deps, usuario **no root** `appuser`, `.venv` cacheable y `HEALTHCHECK` contra `/health/live`) + `.dockerignore`.
+- [x] **`docker-compose.prod.yml`**: Postgres y Redis con `healthcheck` y `depends_on: service_healthy`; la API corre `alembic upgrade head` **antes** de servir tráfico.
+- [x] 89 pruebas en verde (4 nuevas de endurecimiento).
+
+> Fuera del alcance de esta entrega (documentado en la decisión 0017): caché de listados, pruebas de carga y presupuestos de latencia.
+
+## Hoja de ruta completada
+
+Las **14 fases (0 a 13)** del plan están implementadas y commiteadas. Siguientes pasos sugeridos, por orden de valor: caché y rendimiento medido (EXPLAIN + Redis), pruebas de carga, integración real de pasarela y transportadora, panel de administración sobre los endpoints de la Fase 12, y despliegue gestionado en la nube.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.

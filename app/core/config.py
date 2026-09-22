@@ -75,6 +75,10 @@ class Settings(BaseSettings):
     EMAIL_SENDER: str = "logging"
     EMAIL_FROM: str = "no-reply@marketplace.local"
 
+    # Endurecimiento (Fase 13)
+    ALLOWED_HOSTS: list[str] = ["*"]
+    HSTS_MAX_AGE_SECONDS: int = 31536000
+
 
 @lru_cache
 def get_settings() -> Settings:

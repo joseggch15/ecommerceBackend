@@ -1,0 +1,19 @@
+# Entorno de desarrollo y artefactos que no deben entrar en la imagen.
+.venv
+.git
+.gitignore
+.github
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+.mypy_cache
+docs
+tests
+_*.txt
+.env
+.env.*
+!.env.example
+docker-compose*.yml
+Dockerfile
+README.md
