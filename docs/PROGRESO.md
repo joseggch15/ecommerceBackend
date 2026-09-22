@@ -278,3 +278,32 @@ podía completar el flujo desde el enlace del email.
 - [x] `.env` de esta máquina apuntando a Mailpit (`EMAIL_SENDER=smtp`, `FRONTEND_URL=http://localhost:3001` para
       que los enlaces abran la vista previa del dueño) y worker encendido.
 
+## Tienda: facetas, reputación, carrito y preguntas (22/09/2026) — COMPLETADO
+
+Encargo: apartados **3, 7, 9, 12 y 14** de `E:\ecommerce-web\docs/PENDIENTES-BACKEND.md`. Detalle de las
+decisiones: `docs/decisiones/0022-facetas-carrito-y-producto-por-slug.md`.
+
+- [x] **(9) Producto por slug**: `GET /api/v1/catalog/products/by-slug/{slug}` (público, misma respuesta que por
+      id, consulta por el índice único del slug). Apartado 9 — **resuelto**.
+- [x] **(7) Reputación y tienda en la búsqueda**: `ProductSearchItem` añade `rating_average`, `review_count` y
+      `store_name`, con **subconsultas escalares** (sin `JOIN` que multiplique filas). Apartado 7 — **resuelto**.
+- [x] **(3) Conteos por faceta**: `facets` en `GET /catalog/search` con `categories` (`category_id`, `name`,
+      `count`), `brands` (`brand`, `count`) y `price.min`/`price.max` **reales** (sin tramos inventados). Cada
+      faceta se cuenta con los demás filtros aplicados y el suyo fuera. Apartado 3 — **resuelto**.
+- [x] **(14) Avisos de precio y stock en el carrito**: `CartItemOut` añade `available`, `added_unit_price`,
+      `price_changed`, `thumbnail` y `attribute_values` (todo en tres consultas por carrito) y
+      `POST/PATCH /cart/items` responde **409 `insufficient_stock`** si se pide más de lo disponible. El precio
+      de cuando se añadió se guarda en `cart_items.unit_price_snapshot` (migración `dd68961274d7`) y, para
+      invitados, dentro del valor JSON de Redis (compatible con el formato anterior). Apartado 14 — **resuelto**.
+- [x] **(12) Paginación de las preguntas**: `GET /products/{id}/questions?cursor=…` con el mismo cursor que las
+      reseñas y un `next_cursor` real. Apartado 12 — **resuelto**.
+- [x] **Seis pruebas nuevas** (reputación y tienda en la búsqueda, facetas y rango de precio, producto por slug,
+      línea de carrito completa con cambio de precio, rechazo por stock y paginación de preguntas) y **dos
+      adaptadas** porque el comportamiento mejoró: el límite de 100 unidades necesita stock de sobra y el
+      rollback del checkout se provoca reduciendo el stock **después** de añadir al carrito.
+- [x] Reparada la migración `e7c9474064ee` (se había borrado del disco por un comando interrumpido): se recreó
+      con el mismo `revision` para no romper el historial de Alembic.
+- [x] Sigue pendiente (anotado, no inventado): `sold_count` (unidades vendidas) para la insignia «más vendido»,
+      las URLs de imágenes (apartado 1), el listado público del catálogo para el sitemap (13) y el catálogo
+      público de códigos de error (4).
+

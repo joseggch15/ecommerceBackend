@@ -174,6 +174,19 @@ async def create_product(
     return await service.create_product(store.id, data)
 
 
+@router.get("/catalog/products/by-slug/{slug}", response_model=ProductOut)
+async def get_product_by_slug(
+    slug: str,
+    service: ProductService = Depends(get_product_service),
+) -> ProductOut:
+    """Producto por su slug (público): la URL bonita y estable para compartir.
+
+    Va declarado **antes** de `/catalog/products/{product_id}` para que la ruta no se confunda con
+    un identificador; el slug es único y tiene índice.
+    """
+    return await service.get_product_by_slug(slug)
+
+
 @router.get("/catalog/products/{product_id}", response_model=ProductOut)
 async def get_product(
     product_id: uuid.UUID,

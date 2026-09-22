@@ -90,10 +90,11 @@ async def ask_question(
 async def list_product_questions(
     product_id: uuid.UUID,
     limit: int = Query(default=20, ge=1, le=100),
+    cursor: str | None = None,
     service: ReviewService = Depends(get_review_service),
 ) -> QuestionListOut:
-    """Preguntas de un producto con las respuestas del vendedor."""
-    return await service.list_product_questions(product_id, limit=limit)
+    """Preguntas de un producto con las respuestas del vendedor (paginación por cursor)."""
+    return await service.list_product_questions(product_id, limit=limit, cursor=cursor)
 
 
 @router.post(

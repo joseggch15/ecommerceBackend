@@ -219,16 +219,26 @@ async def test_checkout_rolls_back_when_stock_is_missing(
         admin_token=admin_token,
         category_id=category_id,
         sku="SKU-O3",
-        stock=3,
+        stock=5,
     )
     buyer_token = await _register(integration_client, "buyer@example.com", "Comprador")
     await _add_to_cart(integration_client, buyer_token, seller["variant_id"], 5)
+
+    # Alguien se lleva unidades entre el carrito y el pago (el carrito ya avisa del stock al
+    # añadir, pero el stock puede cambiar después): el checkout debe rechazar y no dejar nada.
+    adjusted = await integration_client.post(
+        f"/api/v1/inventory/items/{seller['variant_id']}/adjust",
+        json={"delta": -2, "reason": "venta en tienda"},
+        headers=_auth(admin_token),
+    )
+    assert adjusted.status_code == 200, adjusted.text
+    assert adjusted.json()["available"] == 3
 
     resp = await _checkout(integration_client, buyer_token)
     assert resp.status_code == 409
     assert resp.json()["code"] == "insufficient_stock"
 
-    # Nada se aplicó: ni orden, ni reserva, y el carrito sigue intacto.
+    # Nada se aplicó: ni orden, ni reserva, y el carrito sigue intacto (ahora avisando del stock).
     listing = await integration_client.get("/api/v1/orders", headers=_auth(buyer_token))
     assert listing.json()["items"] == []
 
@@ -238,6 +248,7 @@ async def test_checkout_rolls_back_when_stock_is_missing(
 
     cart = await integration_client.get("/api/v1/cart", headers=_auth(buyer_token))
     assert cart.json()["total_items"] == 5
+    assert cart.json()["items"][0]["available"] == 3
 
 
 async def test_checkout_is_idempotent(

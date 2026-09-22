@@ -246,3 +246,47 @@ async def test_question_and_seller_answer(
     assert len(items) == 1
     assert items[0]["body"] == "¿Tiene garantía?"
     assert items[0]["answers"][0]["body"] == "Si, 12 meses."
+
+
+async def test_questions_are_paginated_by_cursor(
+    integration_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Las preguntas se paginan igual que las reseñas (cursor real, sin perder ninguna)."""
+    ctx = await _context(integration_client, db_session)
+    for index in range(3):
+        asked = await integration_client.post(
+            f"/api/v1/products/{ctx['product_id']}/questions",
+            json={"body": f"Pregunta {index}"},
+            headers=_auth(ctx["buyer"]),
+        )
+        assert asked.status_code == 201, asked.text
+
+    first = await integration_client.get(
+        f"/api/v1/products/{ctx['product_id']}/questions", params={"limit": 2}
+    )
+    page = first.json()
+    assert len(page["items"]) == 2
+    assert page["next_cursor"] is not None
+    first_bodies = {item["body"] for item in page["items"]}
+
+    second = await integration_client.get(
+        f"/api/v1/products/{ctx['product_id']}/questions",
+        params={"limit": 2, "cursor": page["next_cursor"]},
+    )
+    rest = second.json()
+    assert len(rest["items"]) == 1
+    assert rest["next_cursor"] is None
+    # Entre las dos páginas están las tres preguntas, sin repetir ninguna.
+    assert first_bodies | {rest["items"][0]["body"]} == {
+        "Pregunta 0",
+        "Pregunta 1",
+        "Pregunta 2",
+    }
+
+    # El invitado (sin sesión) también puede paginar.
+    guest = await integration_client.get(
+        f"/api/v1/products/{ctx['product_id']}/questions", params={"limit": 3}
+    )
+    assert len(guest.json()["items"]) == 3
+    assert guest.json()["next_cursor"] is None
+

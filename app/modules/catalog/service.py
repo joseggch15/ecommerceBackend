@@ -218,6 +218,13 @@ class ProductService:
             raise AppError(404, "product_not_found", "Product not found.")
         return await self._to_out(product)
 
+    async def get_product_by_slug(self, slug: str) -> ProductOut:
+        """Producto por su slug (consulta por índice único, pública)."""
+        product = await self._products.get_by_slug(slug)
+        if product is None:
+            raise AppError(404, "product_not_found", "Product not found.")
+        return await self._to_out(product)
+
     async def list_products(self, store_id: uuid.UUID) -> list[ProductOut]:
         products = await self._products.list_by_store(store_id)
         return [await self._to_out(p) for p in products]

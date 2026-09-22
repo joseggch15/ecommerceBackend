@@ -1,8 +1,9 @@
 """Modelos ORM del módulo de carrito (solo usuarios registrados)."""
 
 import uuid
+from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import ForeignKey, Integer, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,3 +44,7 @@ class CartItem(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Precio de la variante **cuando se añadió** la línea: sirve para avisar al comprador de que el
+    # precio ha cambiado desde entonces. Puede faltar en líneas antiguas (se añadieron antes de esta
+    # columna), y en ese caso no se avisa de nada.
+    unit_price_snapshot: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)

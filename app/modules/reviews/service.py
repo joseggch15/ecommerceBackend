@@ -159,11 +159,21 @@ class ReviewService:
             answers=[],
         )
 
-    async def list_product_questions(self, product_id: uuid.UUID, *, limit: int) -> QuestionListOut:
-        """Preguntas publicadas de un producto, con sus respuestas."""
+    async def list_product_questions(
+        self, product_id: uuid.UUID, *, limit: int, cursor: str | None = None
+    ) -> QuestionListOut:
+        """Preguntas publicadas de un producto, con sus respuestas (paginación por cursor)."""
         await self._product(product_id)
-        questions = await self._questions.list_by_product(product_id, limit=limit)
-        answers = await self._questions.list_answers([question.id for question in questions])
+        decoded = _decode_cursor(cursor) if cursor else None
+        questions = await self._questions.list_by_product(
+            product_id, limit=limit + 1, cursor=decoded
+        )
+        has_more = len(questions) > limit
+        page = questions[:limit]
+        next_cursor = (
+            _encode_cursor(page[-1].created_at, page[-1].id) if has_more and page else None
+        )
+        answers = await self._questions.list_answers([question.id for question in page])
 
         grouped: dict[uuid.UUID, list[AnswerOut]] = {}
         for answer in answers:
@@ -179,9 +189,9 @@ class ReviewService:
                     created_at=question.created_at,
                     answers=grouped.get(question.id, []),
                 )
-                for question in questions
+                for question in page
             ],
-            next_cursor=None,
+            next_cursor=next_cursor,
         )
 
     async def answer_question(

@@ -156,3 +156,25 @@ async def test_public_store_hides_unapproved_stores(
 
     assert response.status_code == 404
     assert response.json()["code"] == "store_not_found"
+
+
+async def test_public_product_by_slug(
+    integration_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`GET /catalog/products/by-slug/{slug}` devuelve lo mismo que la consulta por id."""
+    product, _, _ = await _create_product_with_attribute(integration_client, db_session)
+
+    by_slug = await integration_client.get(
+        f"/api/v1/catalog/products/by-slug/{product['slug']}"
+    )
+    assert by_slug.status_code == 200, by_slug.text
+    body = by_slug.json()
+    assert body["id"] == product["id"]
+    assert body["slug"] == product["slug"]
+    assert body["variants"][0]["sku"] == "CAM-M"
+    assert body["variants"][0]["stock"] == 7
+
+    missing = await integration_client.get("/api/v1/catalog/products/by-slug/no-existe")
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "product_not_found"
+

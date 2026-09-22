@@ -133,13 +133,28 @@ class QuestionRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_product(self, product_id: uuid.UUID, *, limit: int) -> list[Question]:
-        result = await self._session.execute(
+    async def list_by_product(
+        self,
+        product_id: uuid.UUID,
+        *,
+        limit: int,
+        cursor: tuple[datetime, uuid.UUID] | None,
+    ) -> list[Question]:
+        stmt = (
             select(Question)
             .where(Question.product_id == product_id, Question.is_published.is_(True))
-            .order_by(Question.created_at.desc())
+            .order_by(Question.created_at.desc(), Question.id.desc())
             .limit(limit)
         )
+        if cursor is not None:
+            created_at, question_id = cursor
+            stmt = stmt.where(
+                or_(
+                    Question.created_at < created_at,
+                    (Question.created_at == created_at) & (Question.id < question_id),
+                )
+            )
+        result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
     async def add_answer(self, answer: Answer) -> Answer:
