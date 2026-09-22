@@ -24,6 +24,7 @@ from app.modules.catalog.schemas import (
     ProductUpdate,
     PublicProductListOut,
     UploadUrlOut,
+    VariantStockUpdate,
 )
 from app.modules.catalog.service import CatalogService, ProductService
 from app.modules.identity.deps import require_roles
@@ -288,6 +289,31 @@ async def close_product(
     service: ProductService = Depends(get_product_service),
 ) -> ProductOut:
     return await service.close(product_id, store.id)
+
+
+@router.patch(
+    "/catalog/products/{product_id}/variants/{variant_id}/stock",
+    response_model=ProductOut,
+)
+async def update_variant_stock(
+    product_id: uuid.UUID,
+    variant_id: uuid.UUID,
+    data: VariantStockUpdate,
+    store: Store = Depends(get_approved_store),
+    service: ProductService = Depends(get_product_service),
+) -> ProductOut:
+    """Cambia el stock de una variante **propia** (valor absoluto).
+
+    `stock` es el total que el vendedor tiene en el almacén, no un incremento: el servidor
+    calcula el delta, lo aplica con bloqueo de fila y lo anota en el ledger de inventario.
+    Solo puede hacerlo el dueño de la tienda del producto (`403 forbidden` si el producto es de
+    otro vendedor y `403 seller_required` si quien llama no tiene tienda aprobada). Devuelve el
+    producto completo, con el stock y el `total_available` ya actualizados.
+
+    Nunca baja por debajo de las unidades reservadas por órdenes en curso: eso responde
+    `409 insufficient_stock` (esas unidades ya están vendidas).
+    """
+    return await service.update_variant_stock(product_id, variant_id, store.id, data.stock)
 
 
 @router.post("/catalog/images/upload-url", response_model=UploadUrlOut)

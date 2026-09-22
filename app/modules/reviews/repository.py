@@ -133,6 +133,55 @@ class QuestionRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_question_any(self, question_id: uuid.UUID) -> Question | None:
+        """Pregunta por id **sin** filtrar por visibilidad (moderación de administración)."""
+        result = await self._session.execute(select(Question).where(Question.id == question_id))
+        return result.scalar_one_or_none()
+
+    async def list_for_moderation(
+        self,
+        *,
+        limit: int,
+        cursor: tuple[datetime, uuid.UUID] | None,
+        is_published: bool | None = None,
+    ) -> list[tuple[Question, str]]:
+        """Preguntas de toda la plataforma con el título de su producto (moderación).
+
+        Devuelve `(pregunta, título del producto)`: el administrador necesita saber **sobre qué
+        producto** es la pregunta para decidir si la oculta, y traerlo en la misma consulta evita
+        una consulta por fila. Incluye las ocultas (eso es justo lo que se modera) salvo que se
+        filtre por `is_published`.
+        """
+        stmt = (
+            select(Question, Product.title)
+            .join(Product, Product.id == Question.product_id)
+            .order_by(Question.created_at.desc(), Question.id.desc())
+            .limit(limit)
+        )
+        if is_published is not None:
+            stmt = stmt.where(Question.is_published.is_(is_published))
+        if cursor is not None:
+            created_at, question_id = cursor
+            stmt = stmt.where(
+                or_(
+                    Question.created_at < created_at,
+                    (Question.created_at == created_at) & (Question.id < question_id),
+                )
+            )
+        result = await self._session.execute(stmt)
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def count_answers(self, question_ids: list[uuid.UUID]) -> dict[uuid.UUID, int]:
+        """Número de respuestas por pregunta en **una** consulta (nada de N+1)."""
+        if not question_ids:
+            return {}
+        result = await self._session.execute(
+            select(Answer.question_id, func.count(Answer.id))
+            .where(Answer.question_id.in_(question_ids))
+            .group_by(Answer.question_id)
+        )
+        return {question_id: int(count) for question_id, count in result.all()}
+
     async def list_by_product(
         self,
         product_id: uuid.UUID,

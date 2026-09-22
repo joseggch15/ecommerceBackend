@@ -328,6 +328,35 @@ class ProductService:
         await self._session.commit()
         return await self._to_out(product)
 
+    async def update_variant_stock(
+        self,
+        product_id: uuid.UUID,
+        variant_id: uuid.UUID,
+        store_id: uuid.UUID,
+        stock: int,
+    ) -> ProductOut:
+        """Cambia el stock total de **una variante propia** (valor absoluto).
+
+        Antes, el stock solo se podía fijar al crear la variante: el vendedor no tenía forma de
+        reponer ni corregir unidades, y `/inventory/items/{id}/adjust` es solo de administración.
+        La autorización es la misma que la del resto del catálogo del vendedor: la tienda
+        aprobada del token (`get_approved_store`) **y** que el producto sea suyo
+        (`403 forbidden` en caso contrario). El trabajo fino del inventario (bloqueo de fila,
+        ledger y «nunca por debajo de lo reservado») vive en `InventoryService.set_quantity`.
+
+        Devuelve el producto completo, igual que el resto de operaciones del panel: así la
+        interfaz refresca de una vez el stock de la variante y el `total_available`.
+        """
+        product = await self._get_owned(product_id, store_id)
+        variant = await self._variants.get_by_id(variant_id)
+        if variant is None or variant.product_id != product.id:
+            raise AppError(404, "variant_not_found", "Variant not found.")
+
+        await InventoryService(self._session).set_quantity(
+            variant.id, stock, reason="seller_update"
+        )
+        return await self._to_out(product)
+
     def generate_upload_url(self, data: ImageUploadRequest) -> UploadUrlOut:
         object_key = new_object_key(data.extension)
         upload_url = generate_presigned_upload_url(object_key, data.content_type)

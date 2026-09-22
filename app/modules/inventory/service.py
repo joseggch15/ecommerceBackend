@@ -74,6 +74,42 @@ class InventoryService:
         await self._session.commit()
         return item
 
+    async def set_quantity(
+        self,
+        variant_id: uuid.UUID,
+        quantity: int,
+        *,
+        reason: str = "adjustment",
+        commit: bool = True,
+    ) -> InventoryItem:
+        """**Fija** el stock total de una variante a `quantity` (valor absoluto).
+
+        Es lo que necesita el panel del vendedor («tengo 12 unidades»), en lugar de obligar a
+        calcular el incremento a mano. El delta lo calcula **el servidor** dentro de la misma
+        transacción (`SELECT ... FOR UPDATE`), así que dos cambios simultáneos no se pisan ni
+        dejan el ledger de movimientos descuadrado. Nunca se puede bajar por debajo de lo ya
+        reservado por órdenes en curso (`409 insufficient_stock`): esas unidades están vendidas
+        y quedan pendientes de entrega, no disponibles.
+        """
+        item = await self._items.get_by_variant(variant_id, for_update=True)
+        if item is None:
+            raise AppError(404, "inventory_not_found", "Inventory item not found.")
+
+        if quantity < item.reserved_quantity:
+            raise AppError(409, "insufficient_stock", "Stock cannot go below reserved quantity.")
+
+        delta = quantity - item.quantity
+        if delta == 0:
+            return item
+
+        item.quantity = quantity
+        await self._record_movement(variant_id, delta, reason)
+        if commit:
+            await self._session.commit()
+        else:
+            await self._session.flush()
+        return item
+
     async def reserve(
         self, variant_id: uuid.UUID, quantity: int, *, commit: bool = True
     ) -> InventoryItem:

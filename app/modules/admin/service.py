@@ -5,7 +5,9 @@ qué y por qué) y mueve el estado del recurso. Ocultar una reseña **recalcula*
 reputación del producto y de la tienda.
 """
 
+import base64
 import uuid
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import func, select
@@ -13,13 +15,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.modules.admin.models import AdminAction
-from app.modules.admin.schemas import AdminActionOut, MetricsOut, StoreSalesOut
+from app.modules.admin.repository import AdminUserRepository
+from app.modules.admin.schemas import (
+    AdminActionOut,
+    AdminQuestionListOut,
+    AdminQuestionOut,
+    AdminUserListOut,
+    AdminUserOut,
+    MetricsOut,
+    StoreSalesOut,
+)
 from app.modules.catalog.models import Product, ProductStatus
-from app.modules.identity.models import User
+from app.modules.identity.models import User, UserRole
 from app.modules.orders.models import Order, SellerOrder
 from app.modules.orders.models import PaymentStatus as OrderPaymentStatus
 from app.modules.reviews.models import Review
-from app.modules.reviews.repository import ReviewRepository
+from app.modules.reviews.repository import QuestionRepository, ReviewRepository
 from app.modules.sellers.models import Store, StoreStatus
 
 TWO_PLACES = Decimal("0.01")
@@ -27,6 +38,21 @@ TWO_PLACES = Decimal("0.01")
 
 def _money(value: Decimal) -> Decimal:
     return value.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+
+def _encode_cursor(created_at: datetime, item_id: uuid.UUID) -> str:
+    """Cursor opaco del listado (`created_at` + `id`, en base64), igual que en reseñas."""
+    return base64.urlsafe_b64encode(f"{created_at.isoformat()}|{item_id}".encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    """Devuelve `(created_at, id)` del cursor o lanza 400 si viene corrupto."""
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        value, item_id = raw.rsplit("|", 1)
+        return datetime.fromisoformat(value), uuid.UUID(item_id)
+    except (ValueError, UnicodeDecodeError):
+        raise AppError(400, "invalid_cursor", "Invalid cursor.") from None
 
 
 def _action_out(action: AdminAction) -> AdminActionOut:
@@ -48,6 +74,8 @@ class AdminService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
         self._reviews = ReviewRepository(session)
+        self._questions = QuestionRepository(session)
+        self._users = AdminUserRepository(session)
 
     async def moderate_product(
         self,
@@ -134,6 +162,123 @@ class AdminService:
         )
         await self._session.commit()
         return _action_out(action)
+
+    async def moderate_question(
+        self,
+        admin_id: uuid.UUID,
+        question_id: uuid.UUID,
+        *,
+        hide: bool,
+        reason: str | None = None,
+    ) -> AdminActionOut:
+        """Oculta o republica una pregunta (moderación, igual que las reseñas).
+
+        Ocultar una pregunta la saca del listado público del producto —con sus respuestas dentro,
+        que viajan anidadas— y **también** impide que el vendedor la siga respondiendo, porque la
+        búsqueda de la pregunta para responder exige `is_published`. No se borra nada: republicarla
+        la devuelve tal cual estaba. La acción queda auditada en `admin_actions`.
+        """
+        question = await self._questions.get_question_any(question_id)
+        if question is None:
+            raise AppError(404, "question_not_found", "Question not found.")
+
+        question.is_published = not hide
+        action = await self._record(
+            admin_id,
+            "question.hide" if hide else "question.publish",
+            "question",
+            question.id,
+            reason,
+            {"product_id": str(question.product_id)},
+        )
+        await self._session.commit()
+        return _action_out(action)
+
+    async def list_questions(
+        self, *, published: bool | None, cursor: str | None, limit: int
+    ) -> AdminQuestionListOut:
+        """Preguntas de toda la plataforma para moderar, más recientes primero.
+
+        Incluye las **ocultas** (son justo las que se moderan) salvo que se pida `published=true`
+        o `published=false`. El `product_title` va en la respuesta porque quien modera necesita
+        saber sobre qué producto es la pregunta para juzgarla.
+        """
+        decoded = _decode_cursor(cursor) if cursor else None
+        rows = await self._questions.list_for_moderation(
+            limit=limit + 1, cursor=decoded, is_published=published
+        )
+
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        counts = await self._questions.count_answers([question.id for question, _ in page])
+        next_cursor = None
+        if has_more and page:
+            last, _ = page[-1]
+            next_cursor = _encode_cursor(last.created_at, last.id)
+
+        return AdminQuestionListOut(
+            items=[
+                AdminQuestionOut(
+                    id=question.id,
+                    product_id=question.product_id,
+                    product_title=title,
+                    user_id=question.user_id,
+                    body=question.body,
+                    is_published=question.is_published,
+                    answer_count=counts.get(question.id, 0),
+                    created_at=question.created_at,
+                )
+                for question, title in page
+            ],
+            next_cursor=next_cursor,
+        )
+
+    async def list_users(
+        self,
+        *,
+        q: str | None,
+        role: UserRole | None,
+        cursor: str | None,
+        limit: int,
+    ) -> AdminUserListOut:
+        """Directorio de usuarios: búsqueda por correo, filtro por rol y cursor.
+
+        Devuelve lo que necesita el panel —correo, rol, correo verificado, nombre y, si la cuenta
+        vende, su tienda— y **nada** de credenciales: el repositorio no lee el hash de la
+        contraseña ni las tablas de tokens.
+        """
+        decoded = _decode_cursor(cursor) if cursor else None
+        rows = await self._users.list_users(
+            q=q.strip() if q and q.strip() else None,
+            role=role,
+            limit=limit + 1,
+            cursor=decoded,
+        )
+
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        next_cursor = None
+        if has_more and page:
+            last = page[-1]
+            next_cursor = _encode_cursor(last.created_at, last.id)
+
+        return AdminUserListOut(
+            items=[
+                AdminUserOut(
+                    id=row.id,
+                    email=row.email,
+                    role=row.role,
+                    email_verified=row.email_verified,
+                    full_name=row.full_name,
+                    store_id=row.store_id,
+                    store_name=row.store_name,
+                    store_status=row.store_status,
+                    created_at=row.created_at,
+                )
+                for row in page
+            ],
+            next_cursor=next_cursor,
+        )
 
     async def list_actions(self, *, limit: int = 50) -> list[AdminActionOut]:
         """Libro de auditoría, más recientes primero."""

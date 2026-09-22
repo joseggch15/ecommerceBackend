@@ -337,4 +337,36 @@ decisiones: `docs/decisiones/0023-cierre-lista-frontend.md`.
       verificado, `sold_count` con orden pagada y con reembolso, y el listado público paginado con su cursor
       corrupto) y **dos adaptadas** al nuevo cuerpo del registro (`test_auth.py`).
 
+## Lagunas de la F8 y la F9 (22/09/2026) — COMPLETADO
+
+Encargo: desbloquear los paneles del vendedor (F8) y de administración (F9) **solo añadiendo endpoints**,
+sin romper ningún contrato. No hay migración (todo sale de tablas existentes) y ninguna ruta cambia de forma.
+Detalle de las decisiones: `docs/decisiones/0024-lagunas-f8-f9.md`.
+
+- [x] **(1) El vendedor puede cambiar el stock de sus propias variantes**:
+      `PATCH /api/v1/catalog/products/{product_id}/variants/{variant_id}/stock` con `{"stock": int}`
+      (valor **absoluto**, no un incremento). `InventoryService.set_quantity` calcula el delta en el servidor,
+      lo aplica con `SELECT ... FOR UPDATE` y lo anota en el ledger (`reason = "seller_update"`); si el valor no
+      cambia, no escribe movimiento. Nunca baja por debajo de lo reservado (`409 insufficient_stock`).
+      Autorización: tienda aprobada del token **y** producto propio (`403 forbidden`); un comprador recibe
+      `403 seller_required` y sin sesión `401`. Responde el `ProductOut` completo.
+- [x] **(2) Directorio de usuarios para la administración**: `GET /api/v1/admin/users?q=&role=&cursor=&limit=`
+      (solo admin, paginado por cursor `created_at DESC, id DESC`), con búsqueda por correo (`ILIKE`, contiene),
+      filtro por rol, nombre completo y, si la cuenta tiene tienda, `store_id`/`store_name`/`store_status`
+      (no hay rol «vendedor»: es un usuario con tienda). **Sin credenciales**: el repositorio no lee el hash de
+      la contraseña ni las tablas de tokens, y una prueba comprueba las claves exactas de la respuesta.
+- [x] **(3) Moderación de preguntas**, igual que la de reseñas: `GET /api/v1/admin/questions?published=&cursor=&limit=`
+      (incluye las ocultas, con `product_title` y `answer_count`), `POST /api/v1/admin/questions/{id}/hide` y
+      `POST /api/v1/admin/questions/{id}/publish`, con auditoría `question.hide` / `question.publish` en
+      `admin_actions`. Ocultar la pregunta la saca del listado público (con sus respuestas) y bloquea que el
+      vendedor la responda; republicar la devuelve tal cual.
+- [x] **Diez pruebas de integración nuevas**: cuatro de stock (`tests/modules/catalog/test_variant_stock.py`:
+      dueño, otro vendedor y comprador con 403, por debajo de lo reservado, variante o producto inexistente y
+      el ledger de movimientos) y seis de administración (`tests/modules/admin/test_admin_f9.py`: búsqueda y
+      filtro, paginación por cursor, «sin credenciales», solo admin, moderación completa y 403/404/401).
+- [x] **Ruff, mypy y la suite completa en verde**: `ruff check` sin hallazgos, `mypy` «no issues found in 114
+      source files» y **142 pruebas en verde** (`uv run pytest -q`, 259 s).
+- [x] Documentación del frontend actualizada: `E:\ecommerce-web\docs\PENDIENTES-BACKEND.md` (los tres puntos,
+      resueltos) y `E:\ecommerce-web\docs\SIGUIENTE-PROMPT.md` (F8 y F9 ya pueden usarlos).
+
 

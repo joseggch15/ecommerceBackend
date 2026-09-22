@@ -90,6 +90,16 @@ class ProductCreate(BaseModel):
     variants: list[VariantIn] = Field(default_factory=list)
 
 
+class VariantStockUpdate(BaseModel):
+    """Nuevo stock **total** de una variante (valor absoluto, no un incremento).
+
+    El vendedor escribe lo que tiene en el almacén («12 unidades») y el servidor calcula el
+    delta, lo aplica con bloqueo de fila y lo anota en el ledger de inventario.
+    """
+
+    stock: int = Field(ge=0, le=1_000_000, description="Unidades totales en stock (>= 0).")
+
+
 class ProductUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
