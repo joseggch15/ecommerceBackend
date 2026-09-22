@@ -44,6 +44,8 @@ from app.modules.orders.schemas import (
     SellerOrderOut,
     SellerOrderSummaryOut,
 )
+from app.modules.promotions.models import Coupon
+from app.modules.promotions.service import PromotionService, prorate
 from app.modules.sellers.models import Store
 
 TWO_PLACES = Decimal("0.01")
@@ -61,6 +63,13 @@ SELLER_ORDER_TRANSITIONS: dict[SellerOrderStatus, set[SellerOrderStatus]] = {
 def _money(value: Decimal) -> Decimal:
     """Redondea a 2 decimales con HALF_UP (como se cobra)."""
     return value.quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+
+def _prorate_amount(total: Decimal, weight: Decimal, part: Decimal) -> Decimal:
+    """Parte proporcional de un descuento (redondeada a 2 decimales)."""
+    if total <= 0 or weight <= 0:
+        return Decimal("0")
+    return _money(total * part / weight)
 
 
 def _encode_cursor(created_at: datetime, item_id: uuid.UUID) -> str:
@@ -116,10 +125,25 @@ class OrderService:
         )
 
         grouped: dict[uuid.UUID, list[tuple[ProductVariant, Product, Category | None, int]]] = {}
+        store_subtotals: dict[uuid.UUID, Decimal] = {}
         for variant, product, category, quantity in lines:
             grouped.setdefault(product.store_id, []).append((variant, product, category, quantity))
+            store_subtotals[product.store_id] = store_subtotals.get(
+                product.store_id, Decimal("0")
+            ) + _money(variant.price * quantity)
 
-        order_subtotal = Decimal("0")
+        order_subtotal = _money(sum(store_subtotals.values(), Decimal("0")))
+
+        # Cupón (Fase 10): se valida aquí y se prorratea entre vendedores.
+        promotions: PromotionService | None = None
+        coupon: Coupon | None = None
+        discount = Decimal("0")
+        if data.coupon_code:
+            promotions = PromotionService(self._session)
+            coupon, discount = await promotions.validate_for_user(
+                data.coupon_code, user_id, order_subtotal
+            )
+        store_discounts = prorate(discount, store_subtotals)
 
         for store_id, store_lines in grouped.items():
             seller_order = await self._orders.add_seller_order(
@@ -132,6 +156,7 @@ class OrderService:
             )
             store_subtotal = Decimal("0")
             store_commission = Decimal("0")
+            store_discount = store_discounts.get(store_id, Decimal("0"))
 
             for variant, product, category, quantity in store_lines:
                 if product.status != ProductStatus.ACTIVE:
@@ -145,8 +170,12 @@ class OrderService:
                 await self._inventory.reserve(variant.id, quantity, commit=False)
 
                 line_total = _money(variant.price * quantity)
+                line_discount = _prorate_amount(
+                    store_discount, store_subtotals[store_id], line_total
+                )
                 rate = self._commission_rate(category)
-                commission = _money(line_total * rate / Decimal("100"))
+                # La comisión se calcula sobre el neto (sin el descuento del cupón).
+                commission = _money((line_total - line_discount) * rate / Decimal("100"))
 
                 await self._orders.add_item(
                     OrderItem(
@@ -168,12 +197,16 @@ class OrderService:
                 store_commission += commission
 
             seller_order.subtotal = _money(store_subtotal)
+            seller_order.discount_amount = store_discount
             seller_order.commission_amount = _money(store_commission)
-            seller_order.payout_amount = _money(store_subtotal - store_commission)
-            order_subtotal += store_subtotal
+            seller_order.payout_amount = _money(store_subtotal - store_discount - store_commission)
 
         order.subtotal = _money(order_subtotal)
-        order.total = _money(order.subtotal + order.shipping_total)
+        order.discount_total = _money(discount)
+        order.total = _money(order.subtotal + order.shipping_total - discount)
+
+        if coupon is not None and promotions is not None:
+            await promotions.redeem(coupon, user_id, order.id, _money(discount))
 
         await self._clear_cart(user_id)
         await self._session.commit()
@@ -294,6 +327,7 @@ class OrderService:
             currency=seller_order.currency,
             subtotal=seller_order.subtotal,
             shipping_cost=seller_order.shipping_cost,
+            discount_amount=seller_order.discount_amount,
             commission_amount=seller_order.commission_amount,
             payout_amount=seller_order.payout_amount,
             items=await self._items_out([seller_order.id]),
@@ -364,6 +398,7 @@ class OrderService:
             currency=order.currency,
             subtotal=order.subtotal,
             shipping_total=order.shipping_total,
+            discount_total=order.discount_total,
             total=order.total,
             shipping_address=order.shipping_address,
             notes=order.notes,
@@ -376,6 +411,7 @@ class OrderService:
                     currency=seller_order.currency,
                     subtotal=seller_order.subtotal,
                     shipping_cost=seller_order.shipping_cost,
+                    discount_amount=seller_order.discount_amount,
                     commission_amount=seller_order.commission_amount,
                     payout_amount=seller_order.payout_amount,
                     items=grouped.get(seller_order.id, []),

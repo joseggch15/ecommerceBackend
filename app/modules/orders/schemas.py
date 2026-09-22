@@ -23,6 +23,7 @@ class ShippingAddressIn(BaseModel):
 
 class CheckoutRequest(BaseModel):
     shipping_address: ShippingAddressIn
+    coupon_code: str | None = Field(default=None, max_length=40)
     notes: str | None = Field(default=None, max_length=500)
 
 
@@ -48,6 +49,7 @@ class SellerOrderOut(BaseModel):
     currency: str
     subtotal: Decimal
     shipping_cost: Decimal
+    discount_amount: Decimal
     commission_amount: Decimal
     payout_amount: Decimal
     items: list[OrderItemOut]
@@ -63,6 +65,7 @@ class OrderOut(BaseModel):
     currency: str
     subtotal: Decimal
     shipping_total: Decimal
+    discount_total: Decimal
     total: Decimal
     shipping_address: dict[str, Any]
     notes: str | None

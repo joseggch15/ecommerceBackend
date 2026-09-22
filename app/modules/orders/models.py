@@ -82,6 +82,9 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     shipping_total: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0")
     )
+    discount_total: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=Decimal("0")
+    )
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     shipping_address: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -119,6 +122,9 @@ class SellerOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     subtotal: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     shipping_cost: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=Decimal("0")
+    )
+    discount_amount: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0")
     )
     commission_amount: Mapped[Decimal] = mapped_column(

@@ -14,6 +14,7 @@ import app.modules.identity.models
 import app.modules.inventory.models
 import app.modules.orders.models
 import app.modules.payments.models
+import app.modules.promotions.models
 import app.modules.reviews.models
 import app.modules.sellers.models
 import app.modules.shipping.models
@@ -31,6 +32,7 @@ _MODEL_MODULES = (
     app.modules.inventory.models,
     app.modules.orders.models,
     app.modules.payments.models,
+    app.modules.promotions.models,
     app.modules.reviews.models,
     app.modules.sellers.models,
     app.modules.shipping.models,

@@ -152,9 +152,22 @@
 
 > 🐞 **Bug resuelto:** usar `update()` masivo de SQLAlchemy para los agregados **expiraba** instancias de la sesión y al leerlas después fallaba con `MissingGreenlet` (I/O fuera del greenlet). Ahora se escriben sobre el objeto ORM (`select` + asignación) y, por seguridad, se hace `refresh` antes de responder.
 
+## Fase 10: Promociones y cupones — COMPLETADA
+
+- [x] `coupons`: código único, tipo `percent`/`fixed`, valor, mínimo de compra, vigencia (`starts_at`/`ends_at`), límites de uso totales y por usuario, tienda opcional y `is_active`.
+- [x] `coupon_redemptions`: canje por usuario y orden con `UNIQUE(coupon_id, order_id)` (idempotente) y `used_count` en el cupón.
+- [x] Aplicación **dentro de la transacción del checkout**: el descuento se **prorratea por vendedor** y la **comisión se calcula sobre el neto**.
+- [x] Nuevas columnas `orders.discount_total` y `seller_orders.discount_amount`; el total de la orden descuenta el cupón.
+- [x] Endpoints: `POST /coupons`, `GET /coupons`, `POST /coupons/{id}/deactivate` (solo admin) y `POST /coupons/validate` (vista previa sobre el carrito).
+- [x] Errores claros: **404** `coupon_not_found`; **409** `coupon_exists`, `coupon_not_started`, `coupon_expired`, `min_purchase_not_met`, `coupon_usage_limit`, `coupon_user_limit`.
+- [x] Migración `4a5022ef3817` aplicada (30 tablas, índices GIN intactos).
+- [x] 79 pruebas en verde (4 nuevas de cupones).
+
+> Pendiente: el cupón puede restringirse a una tienda (`store_id`) pero todavía **no** se filtra por líneas del carrito; y los descuentos por producto/oferta por tiempo quedan para más adelante.
+
 ## Próximos pasos
 
-- [ ] Fase 10: Promociones y cupones.
+- [ ] Fase 11: Notificaciones y tareas en segundo plano.
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.
