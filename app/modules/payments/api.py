@@ -3,9 +3,11 @@
 import uuid
 
 from fastapi import APIRouter, Depends, Header, Query, Request
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.redis import get_redis
 from app.modules.identity.deps import get_current_user
 from app.modules.identity.models import User
 from app.modules.payments.schemas import PaymentOut, SandboxOutcome, WebhookAckOut
@@ -14,8 +16,11 @@ from app.modules.payments.service import PaymentService
 router = APIRouter(tags=["payments"])
 
 
-def get_payment_service(session: AsyncSession = Depends(get_session)) -> PaymentService:
-    return PaymentService(session)
+def get_payment_service(
+    session: AsyncSession = Depends(get_session),
+    redis: Redis = Depends(get_redis),
+) -> PaymentService:
+    return PaymentService(session, redis)
 
 
 @router.post("/orders/{order_id}/payments", response_model=PaymentOut, status_code=201)

@@ -71,6 +71,10 @@ class Settings(BaseSettings):
     PAYMENT_WEBHOOK_SECRET: str = "dev-webhook-secret"
     PAYMENT_CHECKOUT_BASE_URL: str = "https://sandbox.marketplace.local/checkout"
 
+    # Notificaciones (remitente de email: "logging" en desarrollo)
+    EMAIL_SENDER: str = "logging"
+    EMAIL_FROM: str = "no-reply@marketplace.local"
+
 
 @lru_cache
 def get_settings() -> Settings:

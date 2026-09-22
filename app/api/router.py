@@ -8,6 +8,7 @@ from app.modules.catalog import api as catalog_api
 from app.modules.currency import api as currency_api
 from app.modules.identity import api as identity_api
 from app.modules.inventory import api as inventory_api
+from app.modules.notifications import api as notifications_api
 from app.modules.orders import api as orders_api
 from app.modules.payments import api as payments_api
 from app.modules.promotions import api as promotions_api
@@ -22,6 +23,7 @@ api_router.include_router(identity_api.router)
 api_router.include_router(sellers_api.router)
 api_router.include_router(catalog_api.router)
 api_router.include_router(inventory_api.router)
+api_router.include_router(notifications_api.router)
 api_router.include_router(search_api.router)
 api_router.include_router(currency_api.router)
 api_router.include_router(cart_api.router)

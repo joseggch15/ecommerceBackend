@@ -165,9 +165,22 @@
 
 > Pendiente: el cupón puede restringirse a una tienda (`store_id`) pero todavía **no** se filtra por líneas del carrito; y los descuentos por producto/oferta por tiempo quedan para más adelante.
 
+## Fase 11: Notificaciones y tareas en segundo plano — COMPLETADA
+
+- [x] `notifications`: aviso **in-app** por usuario y, opcionalmente, el email asociado (`email_to`, `email_status`, `sent_at`, `email_error`).
+- [x] **Cola de trabajos en Redis** (`app/core/queue.py`): FIFO con `enqueue`/`dequeue_batch`/`requeue`/`queue_size`; cambiar a Celery/RQ no toca el dominio.
+- [x] **`EmailSender` detrás de una interfaz** (`logging` en desarrollo, `failing` para probar reintentos) elegido con `EMAIL_SENDER`.
+- [x] **Hilo real:** al confirmarse el pago (`order_paid`) se crea el aviso del comprador y se encola su email; `POST /admin/notifications/process` hace de worker con **reintentos (hasta 3)** reencolando.
+- [x] Endpoints: `GET /notifications` (con `unread_count` y `only_unread`), `POST /notifications/{id}/read`, `POST /notifications/read-all`, `GET /admin/notifications/emails`, `POST /admin/notifications/process` (admin).
+- [x] Migración `03cb2f1cc4f0` aplicada (31 tablas, índices GIN intactos).
+- [x] 82 pruebas en verde (3 nuevas de notificaciones).
+
+> Compromiso conocido: la cola se escribe en Redis **dentro** de la transacción (no hay outbox transaccional). Si la transacción falla tras encolar, el trabajo queda huérfano y el worker lo marca `failed`; para producción conviene un **outbox** en BD.
+
 ## Próximos pasos
 
-- [ ] Fase 11: Notificaciones y tareas en segundo plano.
+- [ ] Fase 12: Administración y moderación.
+- [ ] Fase 13: Endurecimiento (caché, rendimiento, pruebas de carga, seguridad, despliegue).
 - [ ] Fase 8: Envíos.
 - [ ] Fase 9: Reseñas, preguntas y reputación.
 - [ ] Fase 10: Promociones y cupones.

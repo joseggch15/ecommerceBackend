@@ -10,10 +10,15 @@ import json
 import uuid
 from datetime import UTC, datetime
 
+from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import AppError
+from app.modules.identity.models import User
+from app.modules.notifications.models import NotificationType
+from app.modules.notifications.service import NotificationService
 from app.modules.orders.models import Order, OrderStatus
 from app.modules.orders.models import PaymentStatus as OrderPaymentStatus
 from app.modules.orders.repository import OrderRepository
@@ -41,8 +46,9 @@ STATUS_BY_OUTCOME: dict[str, PaymentStatus] = {
 class PaymentService:
     """Intento de pago por orden y procesamiento idempotente de webhooks."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, redis: Redis) -> None:
         self._session = session
+        self._redis = redis
         self._payments = PaymentRepository(session)
         self._orders = OrderRepository(session)
 
@@ -165,6 +171,17 @@ class PaymentService:
                 order.payment_status = OrderPaymentStatus.PAID
                 if order.status == OrderStatus.PENDING:
                     order.status = OrderStatus.PAID
+                buyer_email = await self._session.scalar(
+                    select(User.email).where(User.id == order.user_id)
+                )
+                await NotificationService(self._session, self._redis).notify(
+                    user_id=order.user_id,
+                    type=NotificationType.ORDER_PAID,
+                    title=f"Pago confirmado - {order.order_number}",
+                    body=f"Recibimos tu pago de {payment.amount} {payment.currency}.",
+                    data={"order_id": str(order.id)},
+                    email_to=buyer_email,
+                )
         elif new_status == PaymentStatus.FAILED:
             payment.failure_reason = event.failure_reason or "Payment failed."
         elif new_status == PaymentStatus.REFUNDED:
